@@ -121,7 +121,10 @@ def parse_excel(path):
 
 
 def require_auth():
-    if request.endpoint in {"login", "static"}:
+    open_paths = {"/", "/api/login", "/api/logout"}
+    if request.path.startswith("/static"):
+        return None
+    if request.path in open_paths:
         return None
     if not session.get("authed"):
         return jsonify({"error": "unauthorized"}), 401
