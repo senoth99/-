@@ -106,7 +106,10 @@ function renderShipments() {
           <h3>${shipment.track_number}</h3>
           <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
         </div>
-        <button class="light" data-refresh="${shipment.id}">Обновить</button>
+        <div class="shipment-actions">
+          <button class="light" data-refresh="${shipment.id}">Обновить</button>
+          <button class="icon-btn danger" data-delete="${shipment.id}">×</button>
+        </div>
       </div>
       <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
       <div class="meta">${shipment.last_location || "Локация неизвестна"}</div>
@@ -287,6 +290,19 @@ async function refreshShipment(shipmentId) {
   }
 }
 
+async function deleteShipment(shipmentId) {
+  const confirmed = window.confirm("Удалить отслеживание этой поставки?");
+  if (!confirmed) {
+    return;
+  }
+  try {
+    await api(`/api/shipments/${shipmentId}`, { method: "DELETE" });
+    await loadShipments();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 function registerEvents() {
   qs("add-location-btn").addEventListener("click", () => openModal("location-modal"));
   qs("add-shipment-btn").addEventListener("click", openShipmentModal);
@@ -313,6 +329,9 @@ function registerEvents() {
     }
     if (target.dataset.refresh) {
       refreshShipment(Number(target.dataset.refresh));
+    }
+    if (target.dataset.delete) {
+      deleteShipment(Number(target.dataset.delete));
     }
   });
 }

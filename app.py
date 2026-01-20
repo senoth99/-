@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sqlite3
 import urllib.parse
 import urllib.request
@@ -81,9 +82,19 @@ def normalize_columns(columns):
 
 def infer_columns(columns):
     column_map = {
-        "product": ["товар", "наименование", "product", "sku", "позиция"],
-        "stock": ["остаток", "stock", "остатки", "balance"],
-        "sales_qty": ["продажи", "количество продаж", "sales qty", "qty", "sold"],
+        "product": ["товар", "наименование", "product", "sku", "позиция", "номенклатура"],
+        "brand": ["бренд", "brand"],
+        "characteristic": ["характеристика", "характеристики", "variation", "size", "цвет"],
+        "stock": ["остаток", "stock", "остатки", "balance", "отгруз факт", "отгрузка факт"],
+        "sales_qty": [
+            "продажи",
+            "количество продаж",
+            "sales qty",
+            "qty",
+            "sold",
+            "отгруз по списку",
+            "отгрузка по списку",
+        ],
         "sales_amount": ["сумма", "выручка", "amount", "sales amount", "revenue"],
         "record_date": ["дата", "date", "период"],
     }
@@ -97,23 +108,62 @@ def infer_columns(columns):
     return resolved
 
 
+def coerce_number(value):
+    if pd.isna(value):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    match = re.search(r"-?\\d+[\\.,]?\\d*", str(value))
+    if not match:
+        return None
+    return float(match.group(0).replace(",", "."))
+
+
 def parse_excel(path):
     if path.lower().endswith(".csv"):
         data = pd.read_csv(path)
     else:
         data = pd.read_excel(path)
     mapping = infer_columns(list(data.columns))
-    required = ["product", "stock", "sales_qty", "sales_amount"]
+    required = ["product", "stock"]
     missing = [key for key in required if key not in mapping]
     if missing:
         return None, f"Не найдены колонки: {', '.join(missing)}"
-    parsed = data.rename(columns={
-        mapping["product"]: "product",
-        mapping["stock"]: "stock",
-        mapping["sales_qty"]: "sales_qty",
-        mapping["sales_amount"]: "sales_amount",
-        mapping.get("record_date", ""): "record_date",
-    })
+    rename_map = {}
+    for key in [
+        "product",
+        "stock",
+        "sales_qty",
+        "sales_amount",
+        "record_date",
+        "brand",
+        "characteristic",
+    ]:
+        if key in mapping:
+            rename_map[mapping[key]] = key
+    parsed = data.rename(columns=rename_map)
+    if "brand" in parsed.columns or "characteristic" in parsed.columns:
+        parsed["product"] = parsed.apply(
+            lambda row: " ".join(
+                str(value).strip()
+                for value in [
+                    row.get("brand"),
+                    row.get("product"),
+                    row.get("characteristic"),
+                ]
+                if pd.notna(value) and str(value).strip()
+            ),
+            axis=1,
+        )
+    parsed["stock"] = parsed["stock"].apply(coerce_number)
+    if "sales_qty" in parsed.columns:
+        parsed["sales_qty"] = parsed["sales_qty"].apply(coerce_number)
+    else:
+        parsed["sales_qty"] = None
+    if "sales_amount" in parsed.columns:
+        parsed["sales_amount"] = parsed["sales_amount"].apply(coerce_number)
+    else:
+        parsed["sales_amount"] = None
     if "record_date" not in parsed.columns:
         parsed["record_date"] = None
     parsed = parsed[["product", "stock", "sales_qty", "sales_amount", "record_date"]]
@@ -396,6 +446,18 @@ def refresh_shipment(shipment_id):
                 shipment_id,
             ),
         )
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/shipments/<int:shipment_id>")
+def delete_shipment(shipment_id):
+    with get_db() as conn:
+        result = conn.execute(
+            "DELETE FROM shipments WHERE id = ?",
+            (shipment_id,),
+        )
+        if result.rowcount == 0:
+            return jsonify({"error": "Поставка не найдена"}), 404
     return jsonify({"ok": True})
 
 

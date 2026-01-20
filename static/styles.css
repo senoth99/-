@@ -276,6 +276,16 @@ td {
   align-items: flex-start;
 }
 
+.shipment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .shipment-route {
   font-size: 13px;
   color: #6b7280;
