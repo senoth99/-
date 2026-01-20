@@ -106,12 +106,30 @@ function renderShipments() {
     card.innerHTML = `
       <div class="shipment-header">
         <div>
-          <h3>${shipment.track_number}</h3>
+          <h3>${shipment.internal_number || shipment.track_number || "-"}</h3>
           <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
         </div>
         <div class="shipment-actions">
-          <button class="light" data-refresh="${shipment.id}">Обновить</button>
-          <button class="icon-btn danger" data-delete="${shipment.id}">×</button>
+          <button class="icon-btn success" data-refresh="${shipment.id}" aria-label="Обновить">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20 12a8 8 0 1 1-2.34-5.66"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+              <path
+                d="M20 6v6h-6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button class="icon-btn danger" data-delete="${shipment.id}" aria-label="Удалить">×</button>
         </div>
       </div>
       <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
@@ -337,23 +355,29 @@ function registerEvents() {
 
   document.addEventListener("click", (event) => {
     const target = event.target;
-    if (target.dataset.close) {
-      closeModal(target.dataset.close);
+    const actionTarget = target.closest(
+      "[data-close],[data-upload],[data-records],[data-refresh],[data-delete],[data-delete-location]",
+    );
+    if (!actionTarget) {
+      return;
     }
-    if (target.dataset.upload) {
-      openUpload(Number(target.dataset.upload));
+    if (actionTarget.dataset.close) {
+      closeModal(actionTarget.dataset.close);
     }
-    if (target.dataset.records) {
-      openRecords(Number(target.dataset.records));
+    if (actionTarget.dataset.upload) {
+      openUpload(Number(actionTarget.dataset.upload));
     }
-    if (target.dataset.refresh) {
-      refreshShipment(Number(target.dataset.refresh));
+    if (actionTarget.dataset.records) {
+      openRecords(Number(actionTarget.dataset.records));
     }
-    if (target.dataset.delete) {
-      deleteShipment(Number(target.dataset.delete));
+    if (actionTarget.dataset.refresh) {
+      refreshShipment(Number(actionTarget.dataset.refresh));
     }
-    if (target.dataset.deleteLocation) {
-      deleteLocation(Number(target.dataset.deleteLocation));
+    if (actionTarget.dataset.delete) {
+      deleteShipment(Number(actionTarget.dataset.delete));
+    }
+    if (actionTarget.dataset.deleteLocation) {
+      deleteLocation(Number(actionTarget.dataset.deleteLocation));
     }
   });
 }
