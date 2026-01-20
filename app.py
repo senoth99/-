@@ -1,5 +1,8 @@
+import json
 import os
 import sqlite3
+import urllib.parse
+import urllib.request
 from datetime import datetime
 
 import pandas as pd
@@ -16,6 +19,9 @@ app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 app.config["UPLOAD_DIR"] = UPLOAD_DIR
 
 PASSWORD = os.environ.get("APP_PASSWORD", "admin")
+CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
+CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
+CDEK_API_BASE = os.environ.get("CDEK_API_BASE", "https://api.cdek.ru/v2")
 
 
 def get_db():
@@ -50,6 +56,20 @@ def init_db():
                 source_file TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(location_id) REFERENCES locations(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shipments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                origin_label TEXT NOT NULL,
+                destination_label TEXT NOT NULL,
+                track_number TEXT NOT NULL,
+                last_status TEXT,
+                last_location TEXT,
+                last_update TEXT,
+                created_at TEXT NOT NULL
             )
             """
         )
@@ -106,6 +126,56 @@ def require_auth():
     if not session.get("authed"):
         return jsonify({"error": "unauthorized"}), 401
     return None
+
+
+def cdek_get_token():
+    if not CDEK_CLIENT_ID or not CDEK_CLIENT_SECRET:
+        return None, "Не настроены учетные данные CDEK"
+    payload = urllib.parse.urlencode(
+        {
+            "grant_type": "client_credentials",
+            "client_id": CDEK_CLIENT_ID,
+            "client_secret": CDEK_CLIENT_SECRET,
+        }
+    ).encode("utf-8")
+    request_token = urllib.request.Request(
+        f"{CDEK_API_BASE}/oauth/token?{payload.decode('utf-8')}",
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request_token, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data.get("access_token"), None
+    except Exception as exc:
+        return None, f"Ошибка авторизации CDEK: {exc}"
+
+
+def cdek_get_status(track_number):
+    token, error = cdek_get_token()
+    if error:
+        return None, error
+    request_status = urllib.request.Request(
+        f"{CDEK_API_BASE}/orders?cdek_number={urllib.parse.quote(track_number)}",
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request_status, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            orders = data.get("orders") or []
+            if not orders:
+                return None, "Не найдено данных по трек-номеру"
+            status_info = orders[0].get("statuses", [])
+            if not status_info:
+                return None, "Статусы поставки не найдены"
+            latest = status_info[-1]
+            return {
+                "status": latest.get("name") or latest.get("code"),
+                "location": latest.get("city") or latest.get("city_code"),
+                "timestamp": latest.get("date_time"),
+            }, None
+    except Exception as exc:
+        return None, f"Ошибка получения статуса CDEK: {exc}"
 
 
 app.before_request(require_auth)
@@ -253,6 +323,79 @@ def export_excel():
     return send_file(export_path, as_attachment=True, download_name="crm_export.xlsx")
 
 
+@app.get("/api/shipments")
+def get_shipments():
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, origin_label, destination_label, track_number,
+                   last_status, last_location, last_update, created_at
+            FROM shipments
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.post("/api/shipments")
+def add_shipment():
+    payload = request.get_json() or {}
+    origin_label = payload.get("origin_label", "").strip()
+    destination_label = payload.get("destination_label", "").strip()
+    track_number = payload.get("track_number", "").strip()
+    if not origin_label or not destination_label or not track_number:
+        return jsonify({"error": "Заполните все поля поставки"}), 400
+    status_data, error = cdek_get_status(track_number)
+    if error:
+        status_data = {"status": error, "location": None, "timestamp": None}
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO shipments
+            (origin_label, destination_label, track_number, last_status, last_location, last_update, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                origin_label,
+                destination_label,
+                track_number,
+                status_data.get("status"),
+                status_data.get("location"),
+                status_data.get("timestamp"),
+                datetime.utcnow().isoformat(),
+            ),
+        )
+    return jsonify({"ok": True})
+
+
+@app.post("/api/shipments/<int:shipment_id>/refresh")
+def refresh_shipment(shipment_id):
+    with get_db() as conn:
+        shipment = conn.execute(
+            "SELECT track_number FROM shipments WHERE id = ?",
+            (shipment_id,),
+        ).fetchone()
+        if not shipment:
+            return jsonify({"error": "Поставка не найдена"}), 404
+        status_data, error = cdek_get_status(shipment["track_number"])
+        if error:
+            return jsonify({"error": error}), 400
+        conn.execute(
+            """
+            UPDATE shipments
+            SET last_status = ?, last_location = ?, last_update = ?
+            WHERE id = ?
+            """,
+            (
+                status_data.get("status"),
+                status_data.get("location"),
+                status_data.get("timestamp"),
+                shipment_id,
+            ),
+        )
+    return jsonify({"ok": True})
+
+
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=80, debug=True)

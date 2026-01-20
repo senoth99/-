@@ -1,5 +1,6 @@
 const state = {
   locations: [],
+  shipments: [],
   currentLocationId: null,
 };
 
@@ -45,6 +46,12 @@ async function loadLocations() {
   renderLocations();
 }
 
+async function loadShipments() {
+  const data = await api("/api/shipments");
+  state.shipments = data;
+  renderShipments();
+}
+
 function renderLocations() {
   const grid = qs("location-grid");
   grid.innerHTML = "";
@@ -82,6 +89,34 @@ function renderLocations() {
   });
 }
 
+function renderShipments() {
+  const grid = qs("shipment-grid");
+  grid.innerHTML = "";
+  if (!state.shipments.length) {
+    grid.innerHTML =
+      "<div class='card'>Поставки пока не добавлены. Создайте первую поставку.</div>";
+    return;
+  }
+  state.shipments.forEach((shipment) => {
+    const card = document.createElement("div");
+    card.className = "card shipment-card";
+    card.innerHTML = `
+      <div class="shipment-header">
+        <div>
+          <h3>${shipment.track_number}</h3>
+          <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
+        </div>
+        <button class="light" data-refresh="${shipment.id}">Обновить</button>
+      </div>
+      <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
+      <div class="meta">${shipment.last_location || "Локация неизвестна"}</div>
+      <div class="meta">${formatDate(shipment.last_update)}</div>
+      <div class="shipment-truck">🚚</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
 async function handleLogin() {
   const password = qs("login-password").value.trim();
   const error = qs("login-error");
@@ -112,6 +147,55 @@ async function handleAddLocation() {
     qs("location-address").value = "";
     closeModal("location-modal");
     await loadLocations();
+  } catch (err) {
+    error.textContent = err.message;
+  }
+}
+
+function openShipmentModal() {
+  const origin = qs("shipment-origin");
+  const destination = qs("shipment-destination");
+  const options = [
+    { value: "Склад", label: "Склад" },
+    ...state.locations.map((location) => ({
+      value: location.name,
+      label: location.name,
+    })),
+  ];
+  origin.innerHTML = "";
+  destination.innerHTML = "";
+  options.forEach((option) => {
+    const originOption = document.createElement("option");
+    originOption.value = option.value;
+    originOption.textContent = option.label;
+    origin.appendChild(originOption);
+    const destinationOption = document.createElement("option");
+    destinationOption.value = option.value;
+    destinationOption.textContent = option.label;
+    destination.appendChild(destinationOption);
+  });
+  qs("shipment-track").value = "";
+  qs("shipment-error").textContent = "";
+  openModal("shipment-modal");
+}
+
+async function handleAddShipment() {
+  const origin = qs("shipment-origin").value;
+  const destination = qs("shipment-destination").value;
+  const trackNumber = qs("shipment-track").value.trim();
+  const error = qs("shipment-error");
+  error.textContent = "";
+  try {
+    await api("/api/shipments", {
+      method: "POST",
+      body: JSON.stringify({
+        origin_label: origin,
+        destination_label: destination,
+        track_number: trackNumber,
+      }),
+    });
+    closeModal("shipment-modal");
+    await loadShipments();
   } catch (err) {
     error.textContent = err.message;
   }
@@ -194,11 +278,22 @@ async function exportExcel() {
   window.URL.revokeObjectURL(url);
 }
 
+async function refreshShipment(shipmentId) {
+  try {
+    await api(`/api/shipments/${shipmentId}/refresh`, { method: "POST" });
+    await loadShipments();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 function registerEvents() {
   qs("add-location-btn").addEventListener("click", () => openModal("location-modal"));
+  qs("add-shipment-btn").addEventListener("click", openShipmentModal);
   qs("export-btn").addEventListener("click", exportExcel);
   qs("login-submit").addEventListener("click", handleLogin);
   qs("location-save").addEventListener("click", handleAddLocation);
+  qs("shipment-save").addEventListener("click", handleAddShipment);
   qs("upload-submit").addEventListener("click", submitUpload);
   qs("logout-btn").addEventListener("click", async () => {
     await api("/api/logout", { method: "POST" });
@@ -216,6 +311,9 @@ function registerEvents() {
     if (target.dataset.records) {
       openRecords(Number(target.dataset.records));
     }
+    if (target.dataset.refresh) {
+      refreshShipment(Number(target.dataset.refresh));
+    }
   });
 }
 
@@ -223,6 +321,7 @@ async function init() {
   registerEvents();
   try {
     await loadLocations();
+    await loadShipments();
   } catch (err) {
     if (err.message !== "unauthorized") {
       console.error(err);

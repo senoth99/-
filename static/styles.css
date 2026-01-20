@@ -72,6 +72,17 @@ body {
   padding: 32px;
 }
 
+.section {
+  margin-top: 32px;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -209,6 +220,13 @@ input[type="file"] {
   border: 1px solid #d1d5db;
 }
 
+select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: white;
+}
+
 .error {
   color: #dc2626;
   font-size: 13px;
@@ -245,6 +263,43 @@ td {
   padding: 12px;
   border-radius: 12px;
   font-size: 13px;
+}
+
+.shipment-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.shipment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.shipment-route {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.shipment-status {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.shipment-truck {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 60px;
+  height: 32px;
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+  box-shadow: 0 10px 20px rgba(249, 115, 22, 0.3);
 }
 
 @media (max-width: 900px) {

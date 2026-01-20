@@ -14,6 +14,7 @@
           <p>Контроль продаж</p>
         </div>
         <button class="primary" id="add-location-btn">Добавить точку</button>
+        <button class="ghost" id="add-shipment-btn">Новая поставка</button>
         <button class="ghost" id="export-btn">Экспорт Excel</button>
         <div class="hint">
           <h3>Быстрые подсказки</h3>
@@ -35,6 +36,14 @@
         </header>
 
         <section class="grid" id="location-grid"></section>
+
+        <section class="section">
+          <div class="section-header">
+            <h2>Отслеживание поставок</h2>
+            <span class="subtitle">Статусы CDEK и движение товара</span>
+          </div>
+          <div class="grid" id="shipment-grid"></div>
+        </section>
       </main>
     </div>
 
@@ -101,6 +110,29 @@
             <tbody id="records-body"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="shipment-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Добавить поставку</h2>
+          <button class="icon-btn" data-close="shipment-modal">×</button>
+        </div>
+        <label>
+          Откуда
+          <select id="shipment-origin"></select>
+        </label>
+        <label>
+          Куда
+          <select id="shipment-destination"></select>
+        </label>
+        <label>
+          Трек-номер CDEK
+          <input type="text" id="shipment-track" placeholder="Например, 1234567890" />
+        </label>
+        <button class="primary" id="shipment-save">Сохранить</button>
+        <div class="error" id="shipment-error"></div>
       </div>
     </div>
 
