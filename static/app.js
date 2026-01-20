@@ -83,6 +83,9 @@ function renderLocations() {
       <div class="card-actions">
         <button class="secondary" data-upload="${location.id}">Импорт</button>
         <button class="light" data-records="${location.id}">Детали</button>
+        <button class="light danger" data-delete-location="${location.id}">
+          Удалить
+        </button>
       </div>
     `;
     grid.appendChild(card);
@@ -303,6 +306,22 @@ async function deleteShipment(shipmentId) {
   }
 }
 
+async function deleteLocation(locationId) {
+  const location = state.locations.find((item) => item.id === locationId);
+  const confirmed = window.confirm(
+    `Удалить точку продаж "${location?.name || ""}" и все данные?`,
+  );
+  if (!confirmed) {
+    return;
+  }
+  try {
+    await api(`/api/locations/${locationId}`, { method: "DELETE" });
+    await loadLocations();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 function registerEvents() {
   qs("add-location-btn").addEventListener("click", () => openModal("location-modal"));
   qs("add-shipment-btn").addEventListener("click", openShipmentModal);
@@ -332,6 +351,9 @@ function registerEvents() {
     }
     if (target.dataset.delete) {
       deleteShipment(Number(target.dataset.delete));
+    }
+    if (target.dataset.deleteLocation) {
+      deleteLocation(Number(target.dataset.deleteLocation));
     }
   });
 }

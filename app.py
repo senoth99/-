@@ -4,15 +4,16 @@ import re
 import sqlite3
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_file, session
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "crm.db")
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+DATA_DIR = os.environ.get("DATA_DIR", "/data")
+DB_PATH = os.path.join(DATA_DIR, "crm.db")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret")
@@ -24,6 +25,9 @@ CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
 CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
 CDEK_API_BASE = os.environ.get("CDEK_API_BASE", "https://api.cdek.ru/v2")
 
+_CDEK_TOKEN = None
+_CDEK_TOKEN_EXPIRES_AT = None
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -32,6 +36,7 @@ def get_db():
 
 
 def init_db():
+    os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     with get_db() as conn:
         conn.execute(
@@ -182,6 +187,10 @@ def require_auth():
 
 
 def cdek_get_token():
+    global _CDEK_TOKEN, _CDEK_TOKEN_EXPIRES_AT
+    if _CDEK_TOKEN and _CDEK_TOKEN_EXPIRES_AT:
+        if datetime.utcnow() < _CDEK_TOKEN_EXPIRES_AT:
+            return _CDEK_TOKEN, None
     if not CDEK_CLIENT_ID or not CDEK_CLIENT_SECRET:
         return None, "Не настроены учетные данные CDEK"
     payload = urllib.parse.urlencode(
@@ -192,13 +201,22 @@ def cdek_get_token():
         }
     ).encode("utf-8")
     request_token = urllib.request.Request(
-        f"{CDEK_API_BASE}/oauth/token?{payload.decode('utf-8')}",
+        f"{CDEK_API_BASE}/oauth/token",
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(request_token, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data.get("access_token"), None
+            token = data.get("access_token")
+            expires_in = data.get("expires_in")
+            if token and expires_in:
+                _CDEK_TOKEN = token
+                _CDEK_TOKEN_EXPIRES_AT = datetime.utcnow() + timedelta(
+                    seconds=max(int(expires_in) - 30, 0)
+                )
+            return token, None
     except Exception as exc:
         return None, f"Ошибка авторизации CDEK: {exc}"
 
@@ -208,24 +226,38 @@ def cdek_get_status(track_number):
     if error:
         return None, error
     request_status = urllib.request.Request(
-        f"{CDEK_API_BASE}/orders?cdek_number={urllib.parse.quote(track_number)}",
-        headers={"Authorization": f"Bearer {token}"},
+        f"{CDEK_API_BASE}/tracking?number={urllib.parse.quote(track_number)}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
         method="GET",
     )
     try:
         with urllib.request.urlopen(request_status, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
-            orders = data.get("orders") or []
-            if not orders:
+            entity = None
+            if isinstance(data, dict):
+                entity = data.get("entity")
+                if not entity:
+                    entities = data.get("entities") or []
+                    if entities:
+                        entity = entities[0]
+            if not entity:
                 return None, "Не найдено данных по трек-номеру"
-            status_info = orders[0].get("statuses", [])
+            status_info = entity.get("statuses") or []
             if not status_info:
                 return None, "Статусы поставки не найдены"
             latest = status_info[-1]
+            location = (
+                latest.get("city")
+                or latest.get("city_name")
+                or latest.get("location")
+            )
             return {
-                "status": latest.get("name") or latest.get("code"),
-                "location": latest.get("city") or latest.get("city_code"),
-                "timestamp": latest.get("date_time"),
+                "status": latest.get("name") or latest.get("status") or latest.get("code"),
+                "location": location,
+                "timestamp": latest.get("date_time") or latest.get("date"),
             }, None
     except Exception as exc:
         return None, f"Ошибка получения статуса CDEK: {exc}"
@@ -304,6 +336,16 @@ def get_records(location_id):
     return jsonify([dict(row) for row in rows])
 
 
+@app.delete("/api/locations/<int:location_id>")
+def delete_location(location_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM records WHERE location_id = ?", (location_id,))
+        result = conn.execute("DELETE FROM locations WHERE id = ?", (location_id,))
+        if result.rowcount == 0:
+            return jsonify({"error": "Точка продаж не найдена"}), 404
+    return jsonify({"ok": True})
+
+
 @app.post("/api/upload")
 def upload_file():
     location_id = request.form.get("location_id", type=int)
@@ -347,7 +389,7 @@ def upload_file():
 def export_excel():
     with get_db() as conn:
         locations = conn.execute("SELECT id, name FROM locations ORDER BY name").fetchall()
-        export_path = os.path.join(BASE_DIR, "export.xlsx")
+        export_path = os.path.join(DATA_DIR, "export.xlsx")
         with pd.ExcelWriter(export_path, engine="openpyxl") as writer:
             for location in locations:
                 records = conn.execute(
