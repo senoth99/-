@@ -310,6 +310,11 @@ td {
   font-size: 14px;
 }
 
+.shipment-id {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
 .shipment-truck {
   position: absolute;
   right: 16px;

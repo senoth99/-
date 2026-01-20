@@ -106,7 +106,7 @@ function renderShipments() {
     card.innerHTML = `
       <div class="shipment-header">
         <div>
-          <h3>${shipment.internal_number || shipment.track_number || "-"}</h3>
+          <h3>${shipment.display_number || shipment.internal_number || "-"}</h3>
           <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
         </div>
         <div class="shipment-actions">
@@ -135,6 +135,9 @@ function renderShipments() {
       <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
       <div class="meta">${shipment.last_location || "Локация неизвестна"}</div>
       <div class="meta">${formatDate(shipment.last_update)}</div>
+      <div class="meta shipment-id">${
+        shipment.cdek_uuid ? `UUID: ${shipment.cdek_uuid}` : "UUID: —"
+      }</div>
       <div class="shipment-truck">🚚</div>
     `;
     grid.appendChild(card);
@@ -198,7 +201,8 @@ function openShipmentModal() {
     destinationOption.textContent = option.label;
     destination.appendChild(destinationOption);
   });
-  qs("shipment-track").value = "";
+  qs("shipment-display-number").value = "";
+  qs("shipment-cdek-uuid").value = "";
   qs("shipment-error").textContent = "";
   openModal("shipment-modal");
 }
@@ -206,7 +210,8 @@ function openShipmentModal() {
 async function handleAddShipment() {
   const origin = qs("shipment-origin").value;
   const destination = qs("shipment-destination").value;
-  const trackNumber = qs("shipment-track").value.trim();
+  const displayNumber = qs("shipment-display-number").value.trim();
+  const cdekUuid = qs("shipment-cdek-uuid").value.trim();
   const error = qs("shipment-error");
   error.textContent = "";
   try {
@@ -215,7 +220,8 @@ async function handleAddShipment() {
       body: JSON.stringify({
         origin_label: origin,
         destination_label: destination,
-        track_number: trackNumber,
+        display_number: displayNumber,
+        cdek_uuid: cdekUuid || null,
       }),
     });
     closeModal("shipment-modal");
@@ -312,10 +318,6 @@ async function refreshShipment(shipmentId) {
 }
 
 async function deleteShipment(shipmentId) {
-  const confirmed = window.confirm("Удалить отслеживание этой поставки?");
-  if (!confirmed) {
-    return;
-  }
   try {
     await api(`/api/shipments/${shipmentId}`, { method: "DELETE" });
     await loadShipments();
@@ -325,13 +327,6 @@ async function deleteShipment(shipmentId) {
 }
 
 async function deleteLocation(locationId) {
-  const location = state.locations.find((item) => item.id === locationId);
-  const confirmed = window.confirm(
-    `Удалить точку продаж "${location?.name || ""}" и все данные?`,
-  );
-  if (!confirmed) {
-    return;
-  }
   try {
     await api(`/api/locations/${locationId}`, { method: "DELETE" });
     await loadLocations();
