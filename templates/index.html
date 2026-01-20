@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM офлайн продаж</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <h1>CRM Offline</h1>
+          <p>Контроль продаж</p>
+        </div>
+        <button class="primary" id="add-location-btn">Добавить точку</button>
+        <button class="ghost" id="add-shipment-btn">Новая поставка</button>
+        <button class="ghost" id="export-btn">Экспорт Excel</button>
+        <div class="hint">
+          <h3>Быстрые подсказки</h3>
+          <ul>
+            <li>Данные загружаются из Excel или CSV.</li>
+            <li>Колонки распознаются автоматически.</li>
+            <li>Все изменения сохраняются.</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h2>Точки продаж</h2>
+            <span class="subtitle">Следите за остатками, продажами и выручкой</span>
+          </div>
+          <button class="ghost" id="logout-btn">Выйти</button>
+        </header>
+
+        <section class="grid" id="location-grid"></section>
+
+        <section class="section">
+          <div class="section-header">
+            <h2>Отслеживание поставок</h2>
+            <span class="subtitle">Статусы CDEK и движение товара</span>
+          </div>
+          <div class="grid" id="shipment-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal hidden" id="login-modal">
+      <div class="modal-card">
+        <h2>Вход в CRM</h2>
+        <p>Доступ только по секретному паролю.</p>
+        <input type="password" id="login-password" placeholder="Пароль" />
+        <button class="primary" id="login-submit">Войти</button>
+        <div class="error" id="login-error"></div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="location-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Новая точка продаж</h2>
+          <button class="icon-btn" data-close="location-modal">×</button>
+        </div>
+        <label>
+          Название
+          <input type="text" id="location-name" placeholder="Например, ТЦ Север" />
+        </label>
+        <label>
+          Адрес
+          <input type="text" id="location-address" placeholder="Улица, дом" />
+        </label>
+        <button class="primary" id="location-save">Сохранить</button>
+        <div class="error" id="location-error"></div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="upload-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Загрузить Excel</h2>
+          <button class="icon-btn" data-close="upload-modal">×</button>
+        </div>
+        <div class="upload-info" id="upload-location"></div>
+        <input type="file" id="upload-file" accept=".xlsx,.xls,.csv" />
+        <button class="primary" id="upload-submit">Импортировать</button>
+        <div class="error" id="upload-error"></div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="records-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <h2 id="records-title">Детали точки</h2>
+          <button class="icon-btn" data-close="records-modal">×</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Товар</th>
+                <th>Остаток</th>
+                <th>Продажи (шт.)</th>
+                <th>Выручка</th>
+                <th>Дата</th>
+                <th>Файл</th>
+              </tr>
+            </thead>
+            <tbody id="records-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="shipment-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Добавить поставку</h2>
+          <button class="icon-btn" data-close="shipment-modal">×</button>
+        </div>
+        <label>
+          Откуда
+          <select id="shipment-origin"></select>
+        </label>
+        <label>
+          Куда
+          <select id="shipment-destination"></select>
+        </label>
+        <label>
+          Трек-номер CDEK
+          <input type="text" id="shipment-track" placeholder="Например, 1234567890" />
+        </label>
+        <button class="primary" id="shipment-save">Сохранить</button>
+        <div class="error" id="shipment-error"></div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
