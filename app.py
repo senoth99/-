@@ -72,7 +72,10 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 origin_label TEXT NOT NULL,
                 destination_label TEXT NOT NULL,
-                track_number TEXT NOT NULL,
+                internal_number TEXT NOT NULL,
+                cdek_number TEXT,
+                cdek_uuid TEXT,
+                cdek_state TEXT,
                 last_status TEXT,
                 last_location TEXT,
                 last_update TEXT,
@@ -80,6 +83,21 @@ def init_db():
             )
             """
         )
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(shipments)").fetchall()
+        }
+        if "track_number" in columns and "internal_number" not in columns:
+            conn.execute("ALTER TABLE shipments RENAME COLUMN track_number TO internal_number")
+            columns.discard("track_number")
+            columns.add("internal_number")
+        if "internal_number" not in columns:
+            conn.execute("ALTER TABLE shipments ADD COLUMN internal_number TEXT")
+        if "cdek_number" not in columns:
+            conn.execute("ALTER TABLE shipments ADD COLUMN cdek_number TEXT")
+        if "cdek_uuid" not in columns:
+            conn.execute("ALTER TABLE shipments ADD COLUMN cdek_uuid TEXT")
+        if "cdek_state" not in columns:
+            conn.execute("ALTER TABLE shipments ADD COLUMN cdek_state TEXT")
 
 
 def normalize_columns(columns):
@@ -222,14 +240,6 @@ def cdek_get_token():
         return None, f"Ошибка авторизации CDEK: {exc}"
 
 
-def detect_cdek_id_type(number: str):
-    if "-" in number and len(number) > 30:
-        return "uuid"
-    if number.isdigit() and len(number) >= 10:
-        return "cdek_number"
-    return "unknown"
-
-
 def cdek_request(path):
     token, error = cdek_get_token()
     if error:
@@ -293,13 +303,13 @@ def extract_cdek_status(order_data):
     return None
 
 
-def cdek_get_order_uuid_by_track(track_number):
+def cdek_get_order_uuid_by_cdek_number(cdek_number: str):
     data, status, error = cdek_request(
-        f"/orders?cdek_number={urllib.parse.quote(track_number)}"
+        f"/orders?cdek_number={urllib.parse.quote(cdek_number)}"
     )
     if error:
         if status == 410:
-            return None, "CDEK: endpoint removed or wrong identifier type"
+            return None, "CDEK: неверный тип идентификатора"
         if status == 404:
             return None, "CDEK: заказ не найден"
         return None, error
@@ -312,20 +322,21 @@ def cdek_get_order_uuid_by_track(track_number):
     return order.get("uuid"), None
 
 
-def cdek_get_status(track_number):
-    id_type = detect_cdek_id_type(track_number)
-    if id_type == "uuid":
-        order_uuid = track_number
-    else:
-        order_uuid, error = cdek_get_order_uuid_by_track(track_number)
+def cdek_get_status(cdek_uuid: str | None, cdek_number: str | None):
+    if cdek_uuid:
+        order_uuid = cdek_uuid
+    elif cdek_number:
+        order_uuid, error = cdek_get_order_uuid_by_cdek_number(cdek_number)
         if error:
             return None, error
         if not order_uuid:
             return None, "CDEK: не удалось определить UUID заказа"
+    else:
+        return None, "Отправление ещё не зарегистрировано в СДЭК"
     order_data, status, error = cdek_request(f"/orders/{urllib.parse.quote(order_uuid)}")
     if error:
         if status == 410:
-            return None, "CDEK: endpoint removed or wrong identifier type"
+            return None, "CDEK: неверный тип идентификатора"
         if status == 404:
             return None, "CDEK: заказ не найден"
         return None, error
@@ -495,7 +506,8 @@ def get_shipments():
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT id, origin_label, destination_label, track_number,
+            SELECT id, origin_label, destination_label, internal_number,
+                   cdek_number, cdek_uuid, cdek_state,
                    last_status, last_location, last_update, created_at
             FROM shipments
             ORDER BY created_at DESC
@@ -509,23 +521,37 @@ def add_shipment():
     payload = request.get_json() or {}
     origin_label = payload.get("origin_label", "").strip()
     destination_label = payload.get("destination_label", "").strip()
-    track_number = payload.get("track_number", "").strip()
-    if not origin_label or not destination_label or not track_number:
+    internal_number = (
+        payload.get("internal_number") or payload.get("track_number") or ""
+    ).strip()
+    cdek_number = (payload.get("cdek_number") or "").strip() or None
+    cdek_uuid = (payload.get("cdek_uuid") or "").strip() or None
+    if not origin_label or not destination_label or not internal_number:
         return jsonify({"error": "Заполните все поля поставки"}), 400
-    status_data, error = cdek_get_status(track_number)
-    if error:
-        status_data = {"status": error, "location": None, "timestamp": None}
+    status_data = {
+        "status": "⏳ Ожидает регистрации в СДЭК",
+        "location": None,
+        "timestamp": None,
+    }
+    cdek_state = "CREATED_INTERNAL"
+    if cdek_uuid or cdek_number:
+        status_data["status"] = "Готово к отслеживанию в СДЭК"
+        cdek_state = "REGISTERED"
     with get_db() as conn:
         conn.execute(
             """
             INSERT INTO shipments
-            (origin_label, destination_label, track_number, last_status, last_location, last_update, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (origin_label, destination_label, internal_number, cdek_number, cdek_uuid, cdek_state,
+             last_status, last_location, last_update, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 origin_label,
                 destination_label,
-                track_number,
+                internal_number,
+                cdek_number,
+                cdek_uuid,
+                cdek_state,
                 status_data.get("status"),
                 status_data.get("location"),
                 status_data.get("timestamp"),
@@ -539,24 +565,27 @@ def add_shipment():
 def refresh_shipment(shipment_id):
     with get_db() as conn:
         shipment = conn.execute(
-            "SELECT track_number FROM shipments WHERE id = ?",
+            "SELECT internal_number, cdek_number, cdek_uuid FROM shipments WHERE id = ?",
             (shipment_id,),
         ).fetchone()
         if not shipment:
             return jsonify({"error": "Поставка не найдена"}), 404
-        status_data, error = cdek_get_status(shipment["track_number"])
+        status_data, error = cdek_get_status(
+            shipment["cdek_uuid"], shipment["cdek_number"]
+        )
         if error:
-            return jsonify({"error": error}), 400
+            return jsonify({"error": error}), 409
         conn.execute(
             """
             UPDATE shipments
-            SET last_status = ?, last_location = ?, last_update = ?
+            SET last_status = ?, last_location = ?, last_update = ?, cdek_state = ?
             WHERE id = ?
             """,
             (
                 status_data.get("status"),
                 status_data.get("location"),
                 status_data.get("timestamp"),
+                "IN_TRANSIT",
                 shipment_id,
             ),
         )
