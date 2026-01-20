@@ -4,6 +4,7 @@ import re
 import sqlite3
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError, URLError
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -221,12 +222,20 @@ def cdek_get_token():
         return None, f"Ошибка авторизации CDEK: {exc}"
 
 
-def cdek_get_status(track_number):
+def detect_cdek_id_type(number: str):
+    if "-" in number and len(number) > 30:
+        return "uuid"
+    if number.isdigit() and len(number) >= 10:
+        return "cdek_number"
+    return "unknown"
+
+
+def cdek_request(path):
     token, error = cdek_get_token()
     if error:
-        return None, error
-    request_status = urllib.request.Request(
-        f"{CDEK_API_BASE}/tracking?number={urllib.parse.quote(track_number)}",
+        return None, None, error
+    request_data = urllib.request.Request(
+        f"{CDEK_API_BASE}{path}",
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -234,33 +243,96 @@ def cdek_get_status(track_number):
         method="GET",
     )
     try:
-        with urllib.request.urlopen(request_status, timeout=10) as response:
+        with urllib.request.urlopen(request_data, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
-            entity = None
-            if isinstance(data, dict):
-                entity = data.get("entity")
-                if not entity:
-                    entities = data.get("entities") or []
-                    if entities:
-                        entity = entities[0]
-            if not entity:
-                return None, "Не найдено данных по трек-номеру"
-            status_info = entity.get("statuses") or []
-            if not status_info:
-                return None, "Статусы поставки не найдены"
-            latest = status_info[-1]
-            location = (
-                latest.get("city")
-                or latest.get("city_name")
-                or latest.get("location")
-            )
-            return {
-                "status": latest.get("name") or latest.get("status") or latest.get("code"),
-                "location": location,
-                "timestamp": latest.get("date_time") or latest.get("date"),
-            }, None
+            return data, response.status, None
+    except HTTPError as exc:
+        error_body = None
+        try:
+            error_body = exc.read().decode("utf-8")
+        except Exception:
+            error_body = None
+        return None, exc.code, f"HTTP Error {exc.code}: {exc.reason}. {error_body or ''}".strip()
+    except URLError as exc:
+        return None, None, f"Ошибка подключения к CDEK: {exc}"
     except Exception as exc:
-        return None, f"Ошибка получения статуса CDEK: {exc}"
+        return None, None, f"Ошибка получения статуса CDEK: {exc}"
+
+
+def extract_cdek_status(order_data):
+    if not isinstance(order_data, dict):
+        return None
+    status = order_data.get("status")
+    if isinstance(status, dict):
+        location = (
+            status.get("city")
+            or status.get("city_name")
+            or status.get("location")
+            or order_data.get("city")
+        )
+        return {
+            "status": status.get("name") or status.get("code") or status.get("status"),
+            "location": location,
+            "timestamp": status.get("date_time")
+            or status.get("date")
+            or order_data.get("status_date_time"),
+        }
+    statuses = order_data.get("statuses") or []
+    if statuses:
+        latest = statuses[-1]
+        location = (
+            latest.get("city")
+            or latest.get("city_name")
+            or latest.get("location")
+        )
+        return {
+            "status": latest.get("name") or latest.get("status") or latest.get("code"),
+            "location": location,
+            "timestamp": latest.get("date_time") or latest.get("date"),
+        }
+    return None
+
+
+def cdek_get_order_uuid_by_track(track_number):
+    data, status, error = cdek_request(
+        f"/orders?cdek_number={urllib.parse.quote(track_number)}"
+    )
+    if error:
+        if status == 410:
+            return None, "CDEK: endpoint removed or wrong identifier type"
+        if status == 404:
+            return None, "CDEK: заказ не найден"
+        return None, error
+    orders = []
+    if isinstance(data, dict):
+        orders = data.get("orders") or []
+    if not orders:
+        return None, "CDEK: заказ не найден"
+    order = orders[0]
+    return order.get("uuid"), None
+
+
+def cdek_get_status(track_number):
+    id_type = detect_cdek_id_type(track_number)
+    if id_type == "uuid":
+        order_uuid = track_number
+    else:
+        order_uuid, error = cdek_get_order_uuid_by_track(track_number)
+        if error:
+            return None, error
+        if not order_uuid:
+            return None, "CDEK: не удалось определить UUID заказа"
+    order_data, status, error = cdek_request(f"/orders/{urllib.parse.quote(order_uuid)}")
+    if error:
+        if status == 410:
+            return None, "CDEK: endpoint removed or wrong identifier type"
+        if status == 404:
+            return None, "CDEK: заказ не найден"
+        return None, error
+    status_payload = extract_cdek_status(order_data)
+    if not status_payload:
+        return None, "Статусы поставки не найдены"
+    return status_payload, None
 
 
 app.before_request(require_auth)
