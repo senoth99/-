@@ -26,6 +26,7 @@ app.config["UPLOAD_DIR"] = UPLOAD_DIR
 logger = logging.getLogger(__name__)
 
 PASSWORD = os.environ.get("APP_PASSWORD", "admin")
+ADMIN_LOGIN = os.environ.get("APP_ADMIN_LOGIN", "admin")
 ROLE_ADMIN = "admin"
 ROLE_EMPLOYEE = "employee"
 AUTH_TTL = timedelta(days=7)
@@ -151,6 +152,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                login TEXT,
                 name TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL
@@ -185,6 +187,21 @@ def init_db():
             conn.execute("ALTER TABLE shipments ADD COLUMN cdek_uuid TEXT")
         if "cdek_state" not in columns:
             conn.execute("ALTER TABLE shipments ADD COLUMN cdek_state TEXT")
+        employee_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(employees)").fetchall()
+        }
+        if "login" not in employee_columns:
+            conn.execute("ALTER TABLE employees ADD COLUMN login TEXT")
+        conn.execute(
+            """
+            UPDATE employees
+            SET login = name
+            WHERE login IS NULL OR TRIM(login) = ''
+            """
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_login ON employees(login)"
+        )
         employee_ids = conn.execute("SELECT id FROM employees").fetchall()
         for row in employee_ids:
             ensure_employee_access(conn, row["id"])
@@ -285,7 +302,7 @@ def parse_excel(path):
 
 
 def require_auth():
-    open_paths = {"/login", "/api/login", "/api/logout", "/api/employees"}
+    open_paths = {"/login", "/api/login", "/api/logout"}
     protected_pages = {
         "/",
         "/locations",
@@ -668,36 +685,33 @@ def no_access():
 @app.post("/api/login")
 def login():
     payload = request.get_json() or {}
-    role = payload.get("role", ROLE_EMPLOYEE)
-    if role not in {ROLE_ADMIN, ROLE_EMPLOYEE}:
-        return jsonify({"ok": False, "error": "Неизвестная роль"}), 400
+    login_name = (payload.get("login") or "").strip()
     password = (payload.get("password") or "").strip()
-    if role == ROLE_ADMIN:
+    if not login_name or not password:
+        return jsonify({"ok": False, "error": "Введите логин и пароль"}), 400
+    if login_name == ADMIN_LOGIN:
         if password == PASSWORD:
             session["authed"] = True
-            session["role"] = role
+            session["role"] = ROLE_ADMIN
             session["employee_id"] = None
             session["employee_name"] = None
             session["last_auth_at"] = datetime.utcnow().isoformat()
-            return jsonify({"ok": True, "role": role})
+            return jsonify({"ok": True, "role": ROLE_ADMIN})
         return jsonify({"ok": False, "error": "Неверный пароль"}), 401
 
-    employee_id = payload.get("employee_id")
-    if not employee_id:
-        return jsonify({"ok": False, "error": "Выберите профиль"}), 400
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, name, password_hash FROM employees WHERE id = ?",
-            (employee_id,),
+            "SELECT id, name, password_hash FROM employees WHERE login = ?",
+            (login_name,),
         ).fetchone()
     if not row or not verify_password(password, row["password_hash"]):
         return jsonify({"ok": False, "error": "Неверный пароль"}), 401
     session["authed"] = True
-    session["role"] = role
+    session["role"] = ROLE_EMPLOYEE
     session["employee_id"] = row["id"]
     session["employee_name"] = row["name"]
     session["last_auth_at"] = datetime.utcnow().isoformat()
-    return jsonify({"ok": True, "role": role, "employee": row["name"]})
+    return jsonify({"ok": True, "role": ROLE_EMPLOYEE, "employee": row["name"]})
 
 
 @app.post("/api/logout")
@@ -708,15 +722,12 @@ def logout():
 
 @app.get("/api/employees")
 def list_employees():
-    is_public = request.args.get("public") == "true" or not session.get("authed")
-    if session.get("authed") and get_role() != ROLE_ADMIN and not is_public:
+    if get_role() != ROLE_ADMIN:
         return jsonify({"error": "forbidden"}), 403
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, name, created_at FROM employees ORDER BY created_at DESC"
+            "SELECT id, login, name, created_at FROM employees ORDER BY created_at DESC"
         ).fetchall()
-    if is_public:
-        return jsonify([{"id": row["id"], "name": row["name"]} for row in rows])
     employees = []
     with get_db() as conn:
         for row in rows:
@@ -732,21 +743,25 @@ def create_employee():
     if guard:
         return guard
     payload = request.get_json() or {}
+    login = (payload.get("login") or "").strip()
     name = (payload.get("name") or "").strip()
     password = (payload.get("password") or "").strip()
-    if not name or not password:
-        return jsonify({"error": "Заполните имя и пароль"}), 400
+    if not login or not name or not password:
+        return jsonify({"error": "Заполните логин, имя и пароль"}), 400
     password_hash = hash_password(password)
     created_at = datetime.utcnow().isoformat()
     try:
         with get_db() as conn:
             cursor = conn.execute(
-                "INSERT INTO employees (name, password_hash, created_at) VALUES (?, ?, ?)",
-                (name, password_hash, created_at),
+                """
+                INSERT INTO employees (login, name, password_hash, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (login, name, password_hash, created_at),
             )
             ensure_employee_access(conn, cursor.lastrowid)
     except sqlite3.IntegrityError:
-        return jsonify({"error": "Профиль с таким именем уже существует"}), 400
+        return jsonify({"error": "Профиль с таким логином уже существует"}), 400
     return jsonify({"ok": True})
 
 

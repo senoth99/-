@@ -67,6 +67,7 @@ function renderEmployees(employees) {
       <div class="employee-head">
         <div>
           <h3>${employee.name}</h3>
+          <p class="subtitle">Логин: ${employee.login || "—"}</p>
           <p class="subtitle">Создан: ${formatDate(employee.created_at)}</p>
         </div>
         <div class="employee-actions">
@@ -105,18 +106,20 @@ function init() {
   loadEmployees().catch((err) => setError(err.message));
 
   qs("employee-add")?.addEventListener("click", async () => {
+    const login = qs("employee-login")?.value.trim();
     const name = qs("employee-name")?.value.trim();
     const password = qs("employee-password")?.value.trim();
     setError();
-    if (!name || !password) {
-      setError("Заполните имя и пароль.");
+    if (!login || !name || !password) {
+      setError("Заполните логин, имя и пароль.");
       return;
     }
     try {
       await api("/api/employees", {
         method: "POST",
-        body: JSON.stringify({ name, password }),
+        body: JSON.stringify({ login, name, password }),
       });
+      qs("employee-login").value = "";
       qs("employee-name").value = "";
       qs("employee-password").value = "";
       await loadEmployees();
