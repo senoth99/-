@@ -16,15 +16,17 @@
             <h1>Вход в CASHER CRM</h1>
           </div>
 
-          <div class="login-stepper" aria-hidden="true">
-            <span class="login-stepper-item active" data-stepper="role">Шаг 1</span>
-            <span class="login-stepper-sep">•</span>
-            <span class="login-stepper-item" data-stepper="profile">Шаг 2</span>
-            <span class="login-stepper-sep">•</span>
-            <span class="login-stepper-item" data-stepper="password">Шаг 3</span>
-          </div>
-
-          <div class="login-steps" id="login-steps"></div>
+          <form class="login-form" id="login-form">
+            <label>
+              Логин
+              <input type="text" id="login-name" placeholder="Введите логин" />
+            </label>
+            <label>
+              Пароль
+              <input type="password" id="login-password" placeholder="Введите пароль" />
+            </label>
+            <button class="primary button-wide" type="submit">Войти</button>
+          </form>
           <div class="error" id="login-error"></div>
         </div>
       </main>
