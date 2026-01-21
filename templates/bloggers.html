@@ -37,12 +37,7 @@
 
         <section class="bloggers-tabs">
           <div class="menu-grid">
-            <button
-              class="menu-card menu-card--tab is-active"
-              type="button"
-              data-bloggers-tab="integrations"
-              aria-pressed="true"
-            >
+            <a class="menu-card menu-card--tab is-active" href="/bloggers/integrations">
               <div class="menu-icon">🤝</div>
               <div>
                 <h3>Интеграции</h3>
@@ -50,372 +45,38 @@
                   Карточки, условия и статус UGC по каждой коллаборации.
                 </p>
               </div>
-              <span class="menu-cta" data-tab-cta>Открыто</span>
-            </button>
-            <button
-              class="menu-card menu-card--tab"
-              type="button"
-              data-bloggers-tab="base"
-              aria-pressed="false"
-            >
+              <span class="menu-cta">Открыть →</span>
+            </a>
+            <a class="menu-card menu-card--tab" href="/bloggers/base">
               <div class="menu-icon">🗂️</div>
               <div>
                 <h3>База блогеров</h3>
                 <p class="subtitle">Поиск, фильтры и карточки блогеров.</p>
               </div>
-              <span class="menu-cta" data-tab-cta>Открыть →</span>
-            </button>
-            <button
-              class="menu-card menu-card--tab"
-              type="button"
-              data-bloggers-tab="settings"
-              aria-pressed="false"
-            >
-              <div class="menu-icon">⚙️</div>
-              <div>
-                <h3>Настройки</h3>
-                <p class="subtitle">Ниши, изделия, форматы и параметры.</p>
-              </div>
-              <span class="menu-cta" data-tab-cta>Открыть →</span>
-            </button>
-          </div>
-        </section>
-
-        <div class="bloggers-panel" data-bloggers-section="integrations">
-          <section class="bloggers-section" id="integrations-actions">
-            <div class="section-head">
-              <div>
-                <h3>Добавить интеграцию</h3>
-                <p class="subtitle">Создайте новую карточку интеграции в пару кликов.</p>
-              </div>
-              <div class="section-actions">
-                <button class="primary" id="open-integration-modal">
-                  Добавить интеграцию
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section class="bloggers-section" id="integrations-list">
-            <div class="section-head">
-              <div>
-                <h3>Список интеграций</h3>
-                <p class="subtitle">
-                  Фильтрация по любым полям: блогер, формат, бюджет, изделие и статус.
-                </p>
-              </div>
-              <div class="section-actions">
-                {% if access_map.bloggers_settings %}
-                  <button class="secondary" id="export-integrations">
-                    Выгрузить таблицу
-                  </button>
-                {% else %}
-                  <button class="ghost disabled" id="export-integrations" disabled>
-                    Выгрузить таблицу
-                  </button>
-                {% endif %}
-              </div>
-            </div>
-            <div class="filter-bar">
-              <input
-                type="text"
-                id="integration-search"
-                placeholder="Поиск по блогеру, формату, изделию, тегам..."
-              />
-              <select id="integration-format-filter">
-                <option value="all">Все форматы</option>
-                <option value="Инст-фотопост">Инст-фотопост</option>
-                <option value="Рилс">Рилс</option>
-                <option value="ТГ">ТГ</option>
-                <option value="UGC">UGC</option>
-                <option value="Тикток">Тикток</option>
-                <option value="Твич">Твич</option>
-              </select>
-              <select id="integration-status-filter">
-                <option value="all">UGC: все</option>
-                <option value="Сдан">Сдан</option>
-                <option value="Не сдан">Не сдан</option>
-              </select>
-            </div>
-            <div class="list-grid" id="integration-list"></div>
-          </section>
-        </div>
-
-        <div class="bloggers-panel" data-bloggers-section="base">
-          <section class="bloggers-section" id="blogger-base">
-            <div class="section-head">
-              <div>
-                <h3>База блогеров</h3>
-                <p class="subtitle">
-                  Поиск по имени, тегам или ссылкам на соцсети. Поиск допускает небольшие
-                  опечатки.
-                </p>
-              </div>
-              <div class="section-actions">
-                <button class="secondary" id="open-add-blogger">
-                  Добавить блогера
-                </button>
-              </div>
-            </div>
-            <div class="filter-bar">
-              <input
-                type="text"
-                id="blogger-search"
-                placeholder="Поиск по ФИО, тегу, ссылке..."
-              />
-              <select id="blogger-category-filter">
-                <option value="all">Все категории</option>
-                <option value="Микро">Микро</option>
-                <option value="Мидл">Мидл</option>
-                <option value="Крупный">Крупный</option>
-              </select>
-              <select id="blogger-niche-filter">
-                <option value="all">Все ниши</option>
-              </select>
-            </div>
-            <div class="list-grid" id="blogger-list"></div>
-          </section>
-        </div>
-
-        <div class="bloggers-panel" data-bloggers-section="settings">
-          <section class="bloggers-section" id="blogger-settings">
-            <div class="section-head">
-              <div>
-                <h3>Настройки для блогеров</h3>
-                <p class="subtitle">
-                  Пул ниш, изделий, цветов и форматов редактируется только пользователями
-                  с доступом к настройкам блогеров.
-                </p>
-              </div>
-              <div class="section-actions">
-                {% if access_map.bloggers_settings %}
-                  <span class="pill success">Доступ открыт</span>
-                {% else %}
-                  <span class="pill neutral">Нет доступа</span>
-                {% endif %}
-              </div>
-            </div>
+              <span class="menu-cta">Открыть →</span>
+            </a>
             {% if access_map.bloggers_settings %}
-              <div class="settings-grid" id="settings-grid"></div>
-              <p class="settings-note">
-                Эти настройки синхронизируются с формами интеграций и базой блогеров.
-              </p>
+              <a class="menu-card menu-card--tab" href="/bloggers/settings">
+                <div class="menu-icon">⚙️</div>
+                <div>
+                  <h3>Настройки</h3>
+                  <p class="subtitle">Ниши, изделия, форматы и параметры.</p>
+                </div>
+                <span class="menu-cta">Открыть →</span>
+              </a>
             {% else %}
-              <div class="info-card" aria-disabled="true">
-                <h4>Доступ ограничен</h4>
-                <p class="subtitle">
-                  Запросите доступ к настройкам у администратора, чтобы изменять списки
-                  ниш, изделий и форматов.
-                </p>
+              <div class="menu-card menu-card--tab menu-card--disabled" aria-disabled="true">
+                <div class="menu-icon">⚙️</div>
+                <div>
+                  <h3>Настройки</h3>
+                  <p class="subtitle">Ниши, изделия, форматы и параметры.</p>
+                </div>
+                <span class="menu-cta">Недоступно</span>
               </div>
             {% endif %}
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
     </div>
-
-    <div class="modal hidden" id="integration-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
-          <div>
-            <h3 id="integration-modal-title">Добавление интеграции</h3>
-            <p class="modal-subtitle">
-              Обязательные поля отмечены красной звёздочкой.
-            </p>
-          </div>
-          <button class="icon-btn" data-close-modal="integration-modal">✕</button>
-        </div>
-        <div class="form-grid">
-          <label class="full">
-            Выбор блогера<span class="required">*</span>
-            <input
-              type="text"
-              id="integration-blogger"
-              placeholder="Выберите блогера из базы"
-              readonly
-            />
-          </label>
-          <div class="picker-panel full" id="blogger-picker">
-            <div class="picker-header">
-              <input
-                type="text"
-                id="blogger-picker-search"
-                placeholder="Поиск по имени, ссылке или тегу"
-              />
-              <button class="secondary" id="open-blogger-from-picker">
-                Добавить блогера
-              </button>
-            </div>
-            <div class="picker-list" id="blogger-picker-list"></div>
-          </div>
-          <label>
-            Агент
-            <input type="text" id="integration-agent" readonly />
-          </label>
-          <label>
-            Дата интеграции
-            <input type="date" id="integration-date" />
-          </label>
-          <label>
-            Условия сотрудничества
-            <select id="integration-terms">
-              <option value="Бартер">Бартер</option>
-              <option value="КМ">КМ</option>
-            </select>
-          </label>
-          <label>
-            Формат интеграции
-            <select id="integration-format"></select>
-          </label>
-          <label>
-            Бюджет
-            <input type="text" id="integration-budget" placeholder="Например, 25 000" />
-          </label>
-          <label>
-            UGC сдан/не сдан
-            <select id="integration-ugc">
-              <option value="Сдан">Сдан</option>
-              <option value="Не сдан">Не сдан</option>
-            </select>
-          </label>
-          <label>
-            Изделие
-            <select id="integration-product"></select>
-          </label>
-          <label>
-            Размер
-            <select id="integration-size"></select>
-          </label>
-          <label>
-            Цвет
-            <select id="integration-color"></select>
-          </label>
-          <label>
-            Доп. изделие
-            <select id="integration-extra-product"></select>
-          </label>
-          <label>
-            Размер (доп.)
-            <select id="integration-extra-size"></select>
-          </label>
-          <label>
-            Цвет (доп.)
-            <select id="integration-extra-color"></select>
-          </label>
-          <label class="full">
-            Комментарий
-            <input
-              type="text"
-              id="integration-comment"
-              placeholder="Любые дополнительные детали"
-            />
-          </label>
-          <label class="full">
-            Трек номер
-            <div class="inline-actions">
-              <input type="text" id="integration-track" placeholder="Например, 102104" />
-              <button class="ghost disabled" type="button" disabled>+</button>
-            </div>
-          </label>
-          <label class="full">
-            Контакты
-            <input type="text" id="integration-contacts" placeholder="Контакты блогера" />
-          </label>
-        </div>
-        <div class="card-actions">
-          <button class="secondary" data-close-modal="integration-modal">Отмена</button>
-          <button class="primary" id="save-integration">Сохранить интеграцию</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="integration-detail-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
-          <div>
-            <h3 id="integration-detail-title">Интеграция</h3>
-            <p class="modal-subtitle">Карточка интеграции с возможностью редактирования.</p>
-          </div>
-          <button class="icon-btn" data-close-modal="integration-detail-modal">✕</button>
-        </div>
-        <div class="form-grid" id="integration-detail-fields"></div>
-        <div class="card-actions">
-          <button class="secondary" data-close-modal="integration-detail-modal">
-            Закрыть
-          </button>
-          <button class="primary" id="save-integration-detail">
-            Сохранить изменения
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="blogger-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
-          <div>
-            <h3 id="blogger-modal-title">Добавить блогера</h3>
-            <p class="modal-subtitle">Все поля можно дополнить позже.</p>
-          </div>
-          <button class="icon-btn" data-close-modal="blogger-modal">✕</button>
-        </div>
-        <div class="form-grid">
-          <label>
-            ФИО
-            <input type="text" id="blogger-name" placeholder="Мария Иванова" />
-          </label>
-          <label>
-            Ссылка на инстаграм
-            <input type="text" id="blogger-instagram" placeholder="instagram.com/" />
-          </label>
-          <label>
-            Ссылка на телеграм
-            <input type="text" id="blogger-telegram" placeholder="t.me/" />
-          </label>
-          <label>
-            Ссылка на тикток
-            <input type="text" id="blogger-tiktok" placeholder="tiktok.com/@" />
-          </label>
-          <label>
-            Ниша
-            <select id="blogger-niche"></select>
-          </label>
-          <label>
-            Категория
-            <select id="blogger-category">
-              <option value="Микро">Микро</option>
-              <option value="Мидл">Мидл</option>
-              <option value="Крупный">Крупный</option>
-            </select>
-          </label>
-        </div>
-        <div class="card-actions">
-          <button class="secondary" data-close-modal="blogger-modal">Отмена</button>
-          <button class="primary" id="save-blogger">Сохранить блогера</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="blogger-detail-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
-          <div>
-            <h3 id="blogger-detail-name">Блогер</h3>
-            <p class="modal-subtitle" id="blogger-detail-subtitle"></p>
-          </div>
-          <button class="icon-btn" data-close-modal="blogger-detail-modal">✕</button>
-        </div>
-        <div class="integration-summary" id="blogger-detail-info"></div>
-        <div>
-          <h4>Интеграции с блогером</h4>
-          <div class="list-grid" id="blogger-detail-integrations"></div>
-        </div>
-        <div class="card-actions">
-          <button class="secondary" data-close-modal="blogger-detail-modal">Закрыть</button>
-        </div>
-      </div>
-    </div>
-
-    <script src="/static/bloggers.js"></script>
   </body>
 </html>

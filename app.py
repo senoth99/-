@@ -639,6 +639,46 @@ def bloggers_integrations():
     )
 
 
+@app.route("/bloggers/base")
+def bloggers_base():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("bloggers")
+    if guard:
+        return guard
+    role = get_role()
+    access_map = get_current_access()
+    return render_template(
+        "bloggers_base.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+        profile_login=get_profile_login(),
+        access_map=access_map,
+    )
+
+
+@app.route("/bloggers/settings")
+def bloggers_settings():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("bloggers_settings")
+    if guard:
+        return guard
+    role = get_role()
+    access_map = get_current_access()
+    return render_template(
+        "bloggers_settings.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+        profile_login=get_profile_login(),
+        access_map=access_map,
+    )
+
+
 @app.route("/operations")
 def operations():
     if not session.get("authed"):

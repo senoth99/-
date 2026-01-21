@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — База блогеров</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body bloggers-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+    data-profile-login="{{ profile_login }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/bloggers">Назад</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="bloggers-hero">
+          <span class="hero-badge">База блогеров</span>
+          <h2>Храните базу контактов и управляйте списком блогеров.</h2>
+          <p>
+            Здесь доступны карточки блогеров, фильтрация по категориям и быстрый поиск
+            по тегам, ссылкам и имени.
+          </p>
+        </section>
+
+        <section class="bloggers-section" id="blogger-base">
+          <div class="section-head">
+            <div>
+              <h3>База блогеров</h3>
+              <p class="subtitle">
+                Поиск по имени, тегам или ссылкам на соцсети. Поиск допускает небольшие
+                опечатки.
+              </p>
+            </div>
+            <div class="section-actions">
+              <button class="secondary" id="open-add-blogger">Добавить блогера</button>
+            </div>
+          </div>
+          <div class="filter-bar">
+            <input
+              type="text"
+              id="blogger-search"
+              placeholder="Поиск по ФИО, тегу, ссылке..."
+            />
+            <select id="blogger-category-filter">
+              <option value="all">Все категории</option>
+              <option value="Микро">Микро</option>
+              <option value="Мидл">Мидл</option>
+              <option value="Крупный">Крупный</option>
+            </select>
+            <select id="blogger-niche-filter">
+              <option value="all">Все ниши</option>
+            </select>
+          </div>
+          <div class="list-grid" id="blogger-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal hidden" id="blogger-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3 id="blogger-modal-title">Добавить блогера</h3>
+            <p class="modal-subtitle">Все поля можно дополнить позже.</p>
+          </div>
+          <button class="icon-btn" data-close-modal="blogger-modal">✕</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            ФИО
+            <input type="text" id="blogger-name" placeholder="Мария Иванова" />
+          </label>
+          <label>
+            Ссылка на инстаграм
+            <input type="text" id="blogger-instagram" placeholder="instagram.com/" />
+          </label>
+          <label>
+            Ссылка на телеграм
+            <input type="text" id="blogger-telegram" placeholder="t.me/" />
+          </label>
+          <label>
+            Ссылка на тикток
+            <input type="text" id="blogger-tiktok" placeholder="tiktok.com/@" />
+          </label>
+          <label>
+            Ниша
+            <select id="blogger-niche"></select>
+          </label>
+          <label>
+            Категория
+            <select id="blogger-category">
+              <option value="Микро">Микро</option>
+              <option value="Мидл">Мидл</option>
+              <option value="Крупный">Крупный</option>
+            </select>
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="blogger-modal">Отмена</button>
+          <button class="primary" id="save-blogger">Сохранить блогера</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="blogger-detail-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3 id="blogger-detail-name">Блогер</h3>
+            <p class="modal-subtitle" id="blogger-detail-subtitle"></p>
+          </div>
+          <button class="icon-btn" data-close-modal="blogger-detail-modal">✕</button>
+        </div>
+        <div class="integration-summary" id="blogger-detail-info"></div>
+        <div>
+          <h4>Интеграции с блогером</h4>
+          <div class="list-grid" id="blogger-detail-integrations"></div>
+        </div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="blogger-detail-modal">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/bloggers.js"></script>
+  </body>
+</html>
