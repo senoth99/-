@@ -23,9 +23,21 @@ const formatDate = (value) => {
 
 const statusIconMap = {
   DELIVERED: "📦",
+  DELIVERED_TO_RECIPIENT: "📦",
+  DELIVERED_TO_CLIENT: "📦",
+  DELIVERED_TO_DOOR: "📦",
+  DELIVERED_TO_PVZ: "📦",
+  DELIVERED_TO_POSTOMAT: "📦",
   READY_FOR_PICKUP: "🏬",
+  ARRIVED_AT_PVZ: "🏬",
+  READY_TO_PICKUP: "🏬",
+  READY_TO_RECEIVE: "🏬",
   IN_TRANSIT: "🚚",
+  TRANSIT: "🚚",
+  ON_THE_WAY: "🚚",
   ACCEPTED: "🕒",
+  RECEIVED: "🕒",
+  TAKEN: "🕒",
   CREATED: "📝",
   PENDING_REGISTRATION: "⏳",
   UNKNOWN: "❔",
@@ -35,6 +47,37 @@ const resolveStatusIcon = (shipment) => {
   const code = (shipment.cdek_state || "").toUpperCase();
   if (statusIconMap[code]) {
     return statusIconMap[code];
+  }
+  const statusText = (shipment.last_status || "").toLowerCase();
+  if (
+    statusText.includes("вручен") ||
+    statusText.includes("вручён") ||
+    statusText.includes("доставлен")
+  ) {
+    return "📦";
+  }
+  if (
+    statusText.includes("выдан") ||
+    statusText.includes("готов") ||
+    statusText.includes("ожидает получения")
+  ) {
+    return "🏬";
+  }
+  if (statusText.includes("принят")) {
+    return "🕒";
+  }
+  if (statusText.includes("создан")) {
+    return "📝";
+  }
+  if (statusText.includes("ожидает регистрации")) {
+    return "⏳";
+  }
+  if (
+    statusText.includes("в пути") ||
+    statusText.includes("отправлен") ||
+    statusText.includes("отгруж")
+  ) {
+    return "🚚";
   }
   return "🚚";
 };
