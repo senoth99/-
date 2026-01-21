@@ -44,28 +44,58 @@
       <main class="home-main">
         <section class="menu-panel">
           <div class="menu-stack">
-            <a class="menu-slim" href="/operations">
-              <span class="menu-slim-title">Операционная работа</span>
-              <span class="menu-slim-subtitle">Трекер, база знаний и статистика.</span>
-              <span class="menu-cta">Открыть →</span>
-            </a>
-            <div class="menu-grid">
-              <a class="menu-card" href="/locations">
-                <div class="menu-icon">📍</div>
-                <div>
-                  <h3>Точки продаж</h3>
-                  <p class="subtitle">Остатки, продажи, выручка и поставки.</p>
-                </div>
+            {% if access_map.operations %}
+              <a class="menu-slim" href="/operations">
+                <span class="menu-slim-title">Операционная работа</span>
+                <span class="menu-slim-subtitle">Трекер, база знаний и статистика.</span>
                 <span class="menu-cta">Открыть →</span>
               </a>
-              <div class="menu-card menu-card--disabled" aria-disabled="true">
-                <div class="menu-icon">✨</div>
-                <div>
-                  <h3>Работа с блогерами</h3>
-                  <p class="subtitle">Планирование коллабораций и отчеты.</p>
-                </div>
+            {% else %}
+              <div class="menu-slim menu-card--disabled" aria-disabled="true">
+                <span class="menu-slim-title">Операционная работа</span>
+                <span class="menu-slim-subtitle">Трекер, база знаний и статистика.</span>
                 <span class="menu-cta">Недоступно</span>
               </div>
+            {% endif %}
+            <div class="menu-grid">
+              {% if access_map.locations %}
+                <a class="menu-card" href="/locations">
+                  <div class="menu-icon">📍</div>
+                  <div>
+                    <h3>Точки продаж</h3>
+                    <p class="subtitle">Остатки, продажи, выручка и поставки.</p>
+                  </div>
+                  <span class="menu-cta">Открыть →</span>
+                </a>
+              {% else %}
+                <div class="menu-card menu-card--disabled" aria-disabled="true">
+                  <div class="menu-icon">📍</div>
+                  <div>
+                    <h3>Точки продаж</h3>
+                    <p class="subtitle">Остатки, продажи, выручка и поставки.</p>
+                  </div>
+                  <span class="menu-cta">Недоступно</span>
+                </div>
+              {% endif %}
+              {% if access_map.bloggers %}
+                <a class="menu-card" href="/bloggers">
+                  <div class="menu-icon">✨</div>
+                  <div>
+                    <h3>Работа с блогерами</h3>
+                    <p class="subtitle">Планирование коллабораций и отчеты.</p>
+                  </div>
+                  <span class="menu-cta">Открыть →</span>
+                </a>
+              {% else %}
+                <div class="menu-card menu-card--disabled" aria-disabled="true">
+                  <div class="menu-icon">✨</div>
+                  <div>
+                    <h3>Работа с блогерами</h3>
+                    <p class="subtitle">Планирование коллабораций и отчеты.</p>
+                  </div>
+                  <span class="menu-cta">Недоступно</span>
+                </div>
+              {% endif %}
             </div>
             {% if role == "admin" %}
               <a class="menu-card menu-card--wide menu-card--settings" href="/settings">

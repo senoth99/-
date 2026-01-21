@@ -34,6 +34,63 @@ CDEK_TOKEN_URL = f"{CDEK_API_BASE_URL}/oauth/token"
 CDEK_ORDERS_URL = f"{CDEK_API_BASE_URL}/orders"
 CDEK_TOKEN_REFRESH_BUFFER = timedelta(seconds=60)
 _CDEK_TOKEN_CACHE = {"token": None, "expires_at": datetime.min}
+ACCESS_PAGES = [
+    {"key": "operations", "label": "Операционная работа", "path": "/operations"},
+    {"key": "tasks", "label": "Трекер задач", "path": "/operations/tasks"},
+    {"key": "knowledge", "label": "База знаний", "path": "/operations/knowledge"},
+    {"key": "locations", "label": "Точки продаж", "path": "/locations"},
+    {"key": "bloggers", "label": "Работа с блогерами", "path": "/bloggers"},
+]
+ACCESS_PAGE_KEYS = {page["key"] for page in ACCESS_PAGES}
+ACCESS_PATHS = {page["path"]: page["key"] for page in ACCESS_PAGES}
+
+
+def ensure_employee_access(conn, employee_id):
+    for page in ACCESS_PAGES:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO employee_access (employee_id, page, allowed)
+            VALUES (?, ?, 1)
+            """,
+            (employee_id, page["key"]),
+        )
+
+
+def get_employee_access_for_conn(conn, employee_id):
+    access_map = {page["key"]: True for page in ACCESS_PAGES}
+    if not employee_id:
+        return access_map
+    ensure_employee_access(conn, employee_id)
+    rows = conn.execute(
+        "SELECT page, allowed FROM employee_access WHERE employee_id = ?",
+        (employee_id,),
+    ).fetchall()
+    for row in rows:
+        if row["page"] in access_map:
+            access_map[row["page"]] = bool(row["allowed"])
+    return access_map
+
+
+def get_employee_access(employee_id):
+    with get_db() as conn:
+        return get_employee_access_for_conn(conn, employee_id)
+
+
+def get_current_access():
+    if get_role() == ROLE_ADMIN:
+        return {page["key"]: True for page in ACCESS_PAGES}
+    return get_employee_access(session.get("employee_id"))
+
+
+def require_page_access(page_key, redirect_on_fail=True):
+    if get_role() == ROLE_ADMIN:
+        return None
+    access_map = get_current_access()
+    if access_map.get(page_key, True):
+        return None
+    if redirect_on_fail:
+        return redirect("/no-access")
+    return jsonify({"error": "forbidden"}), 403
 
 
 def get_db():
@@ -100,6 +157,17 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employee_access (
+                employee_id INTEGER NOT NULL,
+                page TEXT NOT NULL,
+                allowed INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(employee_id, page),
+                FOREIGN KEY(employee_id) REFERENCES employees(id)
+            )
+            """
+        )
         columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(shipments)").fetchall()
         }
@@ -117,6 +185,9 @@ def init_db():
             conn.execute("ALTER TABLE shipments ADD COLUMN cdek_uuid TEXT")
         if "cdek_state" not in columns:
             conn.execute("ALTER TABLE shipments ADD COLUMN cdek_state TEXT")
+        employee_ids = conn.execute("SELECT id FROM employees").fetchall()
+        for row in employee_ids:
+            ensure_employee_access(conn, row["id"])
 
 
 def normalize_columns(columns):
@@ -215,7 +286,16 @@ def parse_excel(path):
 
 def require_auth():
     open_paths = {"/login", "/api/login", "/api/logout", "/api/employees"}
-    protected_pages = {"/", "/locations", "/bloggers", "/operations", "/settings"}
+    protected_pages = {
+        "/",
+        "/locations",
+        "/bloggers",
+        "/operations",
+        "/operations/tasks",
+        "/operations/knowledge",
+        "/settings",
+        "/no-access",
+    }
     if request.path.startswith("/static"):
         return None
     if session.get("authed") and not is_auth_fresh():
@@ -456,12 +536,14 @@ def index():
     if not session.get("authed"):
         return redirect("/login")
     role = get_role()
+    access_map = get_current_access()
     return render_template(
         "index.html",
         authed=True,
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
+        access_map=access_map,
     )
 
 
@@ -476,6 +558,9 @@ def login_page():
 def locations():
     if not session.get("authed"):
         return redirect("/")
+    guard = require_page_access("locations")
+    if guard:
+        return guard
     role = get_role()
     return render_template(
         "locations.html",
@@ -490,6 +575,9 @@ def locations():
 def bloggers():
     if not session.get("authed"):
         return redirect("/")
+    guard = require_page_access("bloggers")
+    if guard:
+        return guard
     role = get_role()
     return render_template(
         "bloggers.html",
@@ -504,9 +592,48 @@ def bloggers():
 def operations():
     if not session.get("authed"):
         return redirect("/")
+    guard = require_page_access("operations")
+    if guard:
+        return guard
     role = get_role()
+    access_map = get_current_access()
     return render_template(
         "operations.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+        access_map=access_map,
+    )
+
+
+@app.route("/operations/tasks")
+def operations_tasks():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("tasks")
+    if guard:
+        return guard
+    role = get_role()
+    return render_template(
+        "tasks.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+    )
+
+
+@app.route("/operations/knowledge")
+def operations_knowledge():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("knowledge")
+    if guard:
+        return guard
+    role = get_role()
+    return render_template(
+        "knowledge.html",
         authed=True,
         role=role,
         role_label=get_role_label(role),
@@ -527,7 +654,15 @@ def settings():
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
+        access_pages=ACCESS_PAGES,
     )
+
+
+@app.route("/no-access")
+def no_access():
+    if not session.get("authed"):
+        return redirect("/login")
+    return render_template("no_access.html")
 
 
 @app.post("/api/login")
@@ -584,7 +719,13 @@ def list_employees():
         ).fetchall()
     if is_public:
         return jsonify([{"id": row["id"], "name": row["name"]} for row in rows])
-    return jsonify([dict(row) for row in rows])
+    employees = []
+    with get_db() as conn:
+        for row in rows:
+            employee = dict(row)
+            employee["access"] = get_employee_access_for_conn(conn, row["id"])
+            employees.append(employee)
+    return jsonify(employees)
 
 
 @app.post("/api/employees")
@@ -601,13 +742,49 @@ def create_employee():
     created_at = datetime.utcnow().isoformat()
     try:
         with get_db() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 "INSERT INTO employees (name, password_hash, created_at) VALUES (?, ?, ?)",
                 (name, password_hash, created_at),
             )
+            ensure_employee_access(conn, cursor.lastrowid)
     except sqlite3.IntegrityError:
         return jsonify({"error": "Профиль с таким именем уже существует"}), 400
     return jsonify({"ok": True})
+
+
+@app.post("/api/employees/<int:employee_id>/access")
+def update_employee_access(employee_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    page = payload.get("page")
+    allowed = payload.get("allowed")
+    access = payload.get("access")
+    updates = {}
+    if isinstance(access, dict):
+        updates = access
+    elif page:
+        updates = {page: allowed}
+    if not updates:
+        return jsonify({"error": "Нет данных для обновления"}), 400
+    invalid = [key for key in updates.keys() if key not in ACCESS_PAGE_KEYS]
+    if invalid:
+        return jsonify({"error": "Неизвестная страница доступа"}), 400
+    with get_db() as conn:
+        ensure_employee_access(conn, employee_id)
+        for key, value in updates.items():
+            conn.execute(
+                """
+                INSERT INTO employee_access (employee_id, page, allowed)
+                VALUES (?, ?, ?)
+                ON CONFLICT(employee_id, page)
+                DO UPDATE SET allowed = excluded.allowed
+                """,
+                (employee_id, key, 1 if value else 0),
+            )
+        access_map = get_employee_access_for_conn(conn, employee_id)
+    return jsonify({"ok": True, "access": access_map})
 
 
 @app.post("/api/employees/<int:employee_id>/password")
@@ -644,6 +821,9 @@ def delete_employee(employee_id):
 
 @app.get("/api/locations")
 def get_locations():
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     with get_db() as conn:
         rows = conn.execute(
             """
@@ -663,6 +843,9 @@ def get_locations():
 
 @app.post("/api/locations")
 def add_location():
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     guard = require_admin()
     if guard:
         return guard
@@ -681,6 +864,9 @@ def add_location():
 
 @app.get("/api/records/<int:location_id>")
 def get_records(location_id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     with get_db() as conn:
         rows = conn.execute(
             """
@@ -697,6 +883,9 @@ def get_records(location_id):
 
 @app.delete("/api/locations/<int:location_id>")
 def delete_location(location_id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     guard = require_admin()
     if guard:
         return guard
@@ -710,6 +899,9 @@ def delete_location(location_id):
 
 @app.post("/api/upload")
 def upload_file():
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     guard = require_admin()
     if guard:
         return guard
@@ -752,6 +944,9 @@ def upload_file():
 
 @app.get("/api/export")
 def export_excel():
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     with get_db() as conn:
         locations = conn.execute("SELECT id, name FROM locations ORDER BY name").fetchall()
         export_path = os.path.join(DATA_DIR, "export.xlsx")
@@ -785,6 +980,9 @@ def export_excel():
 
 @app.get("/api/shipments")
 def get_shipments():
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     with get_db() as conn:
         rows = conn.execute(
             """
@@ -800,6 +998,9 @@ def get_shipments():
 
 @app.post("/api/shipments")
 def add_shipment():
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     guard = require_admin()
     if guard:
         return guard
@@ -853,6 +1054,9 @@ def add_shipment():
 
 @app.post("/api/shipments/<int:shipment_id>/refresh")
 def refresh_shipment(shipment_id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     guard = require_admin()
     if guard:
         return guard
@@ -909,6 +1113,9 @@ def track_public_shipment():
 
 @app.delete("/api/shipments/<int:shipment_id>")
 def delete_shipment(shipment_id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
     guard = require_admin()
     if guard:
         return guard

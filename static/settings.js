@@ -12,6 +12,14 @@ async function api(path, options = {}) {
   return response.json();
 }
 
+const accessPages = (() => {
+  try {
+    return JSON.parse(document.body?.dataset?.accessPages || "[]");
+  } catch (err) {
+    return [];
+  }
+})();
+
 function setError(message = "") {
   const error = qs("employee-error");
   if (error) {
@@ -19,33 +27,78 @@ function setError(message = "") {
   }
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  return value.split("T")[0];
+}
+
+function renderAccessToggles(employee) {
+  const access = employee.access || {};
+  return accessPages
+    .map((page) => {
+      const checked = access[page.key] !== false;
+      return `
+        <label class="access-toggle">
+          <input
+            type="checkbox"
+            data-access-key="${page.key}"
+            ${checked ? "checked" : ""}
+          />
+          <span>${page.label}</span>
+        </label>
+      `;
+    })
+    .join("");
+}
+
 function renderEmployees(employees) {
-  const body = qs("employee-table-body");
-  if (!body) return;
-  body.innerHTML = "";
+  const list = qs("employee-list");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!employees.length) {
+    list.innerHTML = "<p class='subtitle'>Нет созданных профилей.</p>";
+    return;
+  }
   employees.forEach((employee) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${employee.name}</td>
-      <td>${employee.created_at?.split("T")[0] || "—"}</td>
-      <td>
-        <button class="ghost small" data-employee-reset="${employee.id}">
-          Сменить пароль
-        </button>
-      </td>
-      <td>
-        <button class="ghost small danger" data-employee-delete="${employee.id}">
-          Удалить
-        </button>
-      </td>
+    const card = document.createElement("div");
+    card.className = "employee-card";
+    card.dataset.employeeId = employee.id;
+    card.innerHTML = `
+      <div class="employee-head">
+        <div>
+          <h3>${employee.name}</h3>
+          <p class="subtitle">Создан: ${formatDate(employee.created_at)}</p>
+        </div>
+        <div class="employee-actions">
+          <button class="ghost small" data-employee-reset="${employee.id}">
+            Сменить пароль
+          </button>
+          <button class="ghost small danger" data-employee-delete="${employee.id}">
+            Удалить
+          </button>
+        </div>
+      </div>
+      <div class="employee-access">
+        <span class="access-title">Доступы</span>
+        <div class="access-grid">
+          ${renderAccessToggles(employee)}
+        </div>
+      </div>
     `;
-    body.appendChild(row);
+    list.appendChild(card);
   });
 }
 
 async function loadEmployees() {
   const employees = await api("/api/employees");
   renderEmployees(employees);
+}
+
+async function updateAccess(employeeId, pageKey, allowed) {
+  await api(`/api/employees/${employeeId}/access`, {
+    method: "POST",
+    body: JSON.stringify({ page: pageKey, allowed }),
+  });
 }
 
 function init() {
@@ -72,7 +125,7 @@ function init() {
     }
   });
 
-  qs("employee-table-body")?.addEventListener("click", async (event) => {
+  qs("employee-list")?.addEventListener("click", async (event) => {
     const deleteBtn = event.target.closest("[data-employee-delete]");
     const resetBtn = event.target.closest("[data-employee-reset]");
     setError();
@@ -94,6 +147,23 @@ function init() {
         await loadEmployees();
       }
     } catch (err) {
+      setError(err.message);
+    }
+  });
+
+  qs("employee-list")?.addEventListener("change", async (event) => {
+    const checkbox = event.target.closest("input[data-access-key]");
+    if (!checkbox) return;
+    const card = checkbox.closest(".employee-card");
+    if (!card) return;
+    const employeeId = card.dataset.employeeId;
+    const pageKey = checkbox.dataset.accessKey;
+    const allowed = checkbox.checked;
+    setError();
+    try {
+      await updateAccess(employeeId, pageKey, allowed);
+    } catch (err) {
+      checkbox.checked = !allowed;
       setError(err.message);
     }
   });

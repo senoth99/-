@@ -11,14 +11,15 @@
     class="crm-body"
     data-authed="{{ 'true' if authed else 'false' }}"
     data-role="{{ role }}"
+    data-access-pages='{{ access_pages | tojson }}'
   >
     <div class="crm-background" aria-hidden="true">
       <span class="crm-orb orb-1"></span>
       <span class="crm-orb orb-2"></span>
       <span class="crm-orb orb-3"></span>
     </div>
-    <div class="page-shell">
-      <header class="page-header">
+    <div class="home-shell">
+      <header class="home-header">
         <div class="brand">
           <h1>CASHER CRM</h1>
           <p>Настройка CRM</p>
@@ -28,35 +29,35 @@
         </div>
       </header>
 
-      <main class="page-main">
-        <section class="ops-section">
-          <div class="ops-header">
-            <div>
-              <h2>Профили сотрудников</h2>
-              <p class="subtitle">
-                Создавайте профили, задавайте пароли и управляйте доступом.
-              </p>
+      <main class="home-main">
+        <section class="menu-panel">
+          <div class="menu-stack">
+            <div class="menu-card menu-card--wide menu-card--static settings-card">
+              <div class="settings-header">
+                <div>
+                  <h2>Профили сотрудников</h2>
+                  <p class="subtitle">
+                    Создавайте профили, задавайте пароли и управляйте доступом.
+                  </p>
+                </div>
+              </div>
+              <div class="settings-form">
+                <input type="text" id="employee-name" placeholder="Имя сотрудника" />
+                <input type="password" id="employee-password" placeholder="Пароль" />
+                <button class="primary" id="employee-add">Создать профиль</button>
+              </div>
+            </div>
+            <div class="menu-card menu-card--wide menu-card--static settings-card">
+              <div class="settings-header">
+                <div>
+                  <h2>Доступы сотрудников</h2>
+                  <p class="subtitle">Управляйте правами на разделы CRM.</p>
+                </div>
+              </div>
+              <div class="employee-list" id="employee-list"></div>
+              <div class="error" id="employee-error"></div>
             </div>
           </div>
-          <div class="ops-form">
-            <input type="text" id="employee-name" placeholder="Имя сотрудника" />
-            <input type="password" id="employee-password" placeholder="Пароль" />
-            <button class="primary" id="employee-add">Создать профиль</button>
-          </div>
-          <div class="ops-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Имя</th>
-                  <th>Создан</th>
-                  <th>Пароль</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="employee-table-body"></tbody>
-            </table>
-          </div>
-          <div class="error" id="employee-error"></div>
         </section>
       </main>
     </div>
