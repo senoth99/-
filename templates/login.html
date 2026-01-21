@@ -14,15 +14,6 @@
           <div class="login-header">
             <span class="login-badge">CRM-доступ</span>
             <h1>Вход в CASHER CRM</h1>
-            <p class="subtitle">Вход в 3 шага: роль → профиль → пароль.</p>
-          </div>
-
-          <div class="login-stepper" aria-hidden="true">
-            <span class="login-stepper-item active" data-stepper="role">ВОЙТИ</span>
-            <span class="login-stepper-sep">→</span>
-            <span class="login-stepper-item" data-stepper="profile">выбор профиля</span>
-            <span class="login-stepper-sep">→</span>
-            <span class="login-stepper-item" data-stepper="password">ввод пароля</span>
           </div>
 
           <div class="login-steps">
@@ -35,7 +26,9 @@
                   Сотрудник
                 </button>
               </div>
-              <button class="primary" id="role-next">Продолжить</button>
+              <div class="step-actions step-actions--stack">
+                <button class="primary button-wide" id="role-next">Продолжить</button>
+              </div>
             </section>
 
             <section class="login-step hidden" data-step="profile">
@@ -43,9 +36,9 @@
                 <p class="subtitle">Выберите профиль сотрудника для входа.</p>
                 <div class="profile-grid" id="employee-profiles"></div>
               </div>
-              <div class="step-actions">
+              <div class="step-actions step-actions--stack">
                 <button class="ghost" id="profile-back">Назад</button>
-                <button class="primary" id="profile-next">Продолжить</button>
+                <button class="primary button-wide" id="profile-next">Далее</button>
               </div>
             </section>
 
@@ -54,9 +47,9 @@
                 Пароль
                 <input type="password" id="login-password" placeholder="Введите пароль" />
               </label>
-              <div class="step-actions">
+              <div class="step-actions step-actions--stack">
                 <button class="ghost" id="password-back">Назад</button>
-                <button class="primary" id="login-submit">Войти</button>
+                <button class="primary button-wide" id="login-submit">Войти</button>
               </div>
             </section>
           </div>

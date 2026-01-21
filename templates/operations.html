@@ -17,8 +17,8 @@
       <span class="crm-orb orb-2"></span>
       <span class="crm-orb orb-3"></span>
     </div>
-    <div class="page-shell">
-      <header class="page-header">
+    <div class="home-shell">
+      <header class="home-header">
         <div class="brand">
           <h1>CASHER CRM</h1>
           <p>Операционная работа</p>
@@ -28,88 +28,59 @@
         </div>
       </header>
 
-      <main class="page-main">
-        <section class="ops-section">
-          <div class="ops-header">
-            <div>
-              <h2>Трекер задач</h2>
-              <p class="subtitle">Актуальные задачи с ответственными и статусами.</p>
+      <main class="home-main">
+        <section class="menu-panel">
+          <div class="menu-stack">
+            <div class="menu-grid">
+              {% if access_map.tasks %}
+                <a class="menu-card" href="/operations/tasks">
+                  <div class="menu-icon">✅</div>
+                  <div>
+                    <h3>Трекер задач</h3>
+                    <p class="subtitle">Задачи, статусы и приоритеты команды.</p>
+                  </div>
+                  <span class="menu-cta">Открыть →</span>
+                </a>
+              {% else %}
+                <div class="menu-card menu-card--disabled" aria-disabled="true">
+                  <div class="menu-icon">✅</div>
+                  <div>
+                    <h3>Трекер задач</h3>
+                    <p class="subtitle">Задачи, статусы и приоритеты команды.</p>
+                  </div>
+                  <span class="menu-cta">Недоступно</span>
+                </div>
+              {% endif %}
+              {% if access_map.knowledge %}
+                <a class="menu-card" href="/operations/knowledge">
+                  <div class="menu-icon">📚</div>
+                  <div>
+                    <h3>База знаний</h3>
+                    <p class="subtitle">Документы, регламенты и заметки.</p>
+                  </div>
+                  <span class="menu-cta">Открыть →</span>
+                </a>
+              {% else %}
+                <div class="menu-card menu-card--disabled" aria-disabled="true">
+                  <div class="menu-icon">📚</div>
+                  <div>
+                    <h3>База знаний</h3>
+                    <p class="subtitle">Документы, регламенты и заметки.</p>
+                  </div>
+                  <span class="menu-cta">Недоступно</span>
+                </div>
+              {% endif %}
             </div>
-            <button class="ghost" id="add-task-row">+ Новая задача</button>
+            {% if role == "admin" %}
+              <div class="menu-card menu-card--wide menu-card--static menu-card--stats">
+                <div>
+                  <h3>Статистика по нагрузке</h3>
+                  <p class="subtitle">Сводка по задачам из трекера.</p>
+                </div>
+                <div class="ops-stats" id="load-stats"></div>
+              </div>
+            {% endif %}
           </div>
-          <div class="ops-form">
-            <input type="text" id="task-title" placeholder="Название задачи" />
-            <select id="task-status">
-              <option value="В работе">В работе</option>
-              <option value="План">План</option>
-              <option value="Ожидание">Ожидание</option>
-              <option value="Готово">Готово</option>
-            </select>
-            <select id="task-priority">
-              <option value="Высокий">Высокий</option>
-              <option value="Средний">Средний</option>
-              <option value="Низкий">Низкий</option>
-            </select>
-            <select id="task-assignee"></select>
-            <input type="date" id="task-deadline" />
-            <button class="primary" id="task-add">Добавить</button>
-          </div>
-          <div class="ops-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Статус</th>
-                  <th>Приоритет</th>
-                  <th>Задача</th>
-                  <th>Ответственный</th>
-                  <th>Дедлайн</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="task-table-body"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="ops-section">
-          <div class="ops-header">
-            <div>
-              <h2>База знаний</h2>
-              <p class="subtitle">Документы и регламенты, как в Notion.</p>
-            </div>
-            <button class="ghost" id="add-knowledge-row">+ Новый документ</button>
-          </div>
-          <div class="ops-form">
-            <input type="text" id="knowledge-title" placeholder="Название" />
-            <input type="text" id="knowledge-section" placeholder="Раздел" />
-            <select id="knowledge-owner"></select>
-            <input type="text" id="knowledge-tag" placeholder="Тег (WIKI, регламент)" />
-            <button class="primary" id="knowledge-add">Добавить</button>
-          </div>
-          <div class="ops-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Раздел</th>
-                  <th>Название</th>
-                  <th>Кем создано</th>
-                  <th>Тег</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="knowledge-table-body"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="ops-section">
-          <div class="ops-header">
-            <div>
-              <h2>Статистика по нагрузке</h2>
-              <p class="subtitle">Сводка по задачам из трекера.</p>
-            </div>
-          </div>
-          <div class="ops-stats" id="load-stats"></div>
         </section>
       </main>
     </div>
