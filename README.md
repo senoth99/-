@@ -16,8 +16,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export APP_PASSWORD="your-secret"
-export CDEK_CLIENT_ID="your-client-id"
-export CDEK_CLIENT_SECRET="your-client-secret"
 python app.py
 ```
 
@@ -31,9 +29,8 @@ CRM распознает ключевые колонки по названиям
 преобразованы в число автоматически.
 
 ## Отслеживание поставок
-Для получения статусов по трек-номеру CDEK настройте переменные `CDEK_CLIENT_ID` и
-`CDEK_CLIENT_SECRET`. Если доступ к API не настроен, статус поставки будет содержать
-сообщение об ошибке авторизации или поиска.
+Для получения статусов по трек-номеру CDEK используется публичная страница
+отслеживания (без авторизации).
 
 ## Требования
 Все зависимости перечислены в `requirements.txt`.
