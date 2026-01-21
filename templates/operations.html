@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — Операционная работа</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="page-shell">
+      <header class="page-header">
+        <div class="brand">
+          <h1>CASHER CRM</h1>
+          <p>Операционная работа</p>
+        </div>
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+        </div>
+      </header>
+
+      <main class="page-main">
+        <section class="ops-section">
+          <div class="ops-header">
+            <div>
+              <h2>Трекер задач</h2>
+              <p class="subtitle">Актуальные задачи с ответственными и статусами.</p>
+            </div>
+            <button class="ghost" id="add-task-row">+ Новая задача</button>
+          </div>
+          <div class="ops-form">
+            <input type="text" id="task-title" placeholder="Название задачи" />
+            <select id="task-status">
+              <option value="В работе">В работе</option>
+              <option value="План">План</option>
+              <option value="Ожидание">Ожидание</option>
+              <option value="Готово">Готово</option>
+            </select>
+            <select id="task-priority">
+              <option value="Высокий">Высокий</option>
+              <option value="Средний">Средний</option>
+              <option value="Низкий">Низкий</option>
+            </select>
+            <select id="task-assignee"></select>
+            <input type="date" id="task-deadline" />
+            <button class="primary" id="task-add">Добавить</button>
+          </div>
+          <div class="ops-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Статус</th>
+                  <th>Приоритет</th>
+                  <th>Задача</th>
+                  <th>Ответственный</th>
+                  <th>Дедлайн</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="task-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="ops-section">
+          <div class="ops-header">
+            <div>
+              <h2>База знаний</h2>
+              <p class="subtitle">Документы и регламенты, как в Notion.</p>
+            </div>
+            <button class="ghost" id="add-knowledge-row">+ Новый документ</button>
+          </div>
+          <div class="ops-form">
+            <input type="text" id="knowledge-title" placeholder="Название" />
+            <input type="text" id="knowledge-section" placeholder="Раздел" />
+            <select id="knowledge-owner"></select>
+            <input type="text" id="knowledge-tag" placeholder="Тег (WIKI, регламент)" />
+            <button class="primary" id="knowledge-add">Добавить</button>
+          </div>
+          <div class="ops-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Раздел</th>
+                  <th>Название</th>
+                  <th>Кем создано</th>
+                  <th>Тег</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="knowledge-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="ops-section">
+          <div class="ops-header">
+            <div>
+              <h2>Статистика по нагрузке</h2>
+              <p class="subtitle">Сводка по задачам из трекера.</p>
+            </div>
+          </div>
+          <div class="ops-stats" id="load-stats"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/operations.js"></script>
+  </body>
+</html>
