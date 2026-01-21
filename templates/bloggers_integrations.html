@@ -52,7 +52,7 @@
             <div>
               <h3>Список интеграций</h3>
               <p class="subtitle">
-                Фильтрация по любым полям: блогер, формат, бюджет, изделие и статус.
+                Фильтрация по любым полям: блогер, формат, условия, бюджет, изделие и дата.
               </p>
             </div>
             <div class="section-actions">
@@ -103,11 +103,12 @@
               <option value="Тикток">Тикток</option>
               <option value="Твич">Твич</option>
             </select>
-            <select id="integration-status-filter">
-              <option value="all">UGC: все</option>
-              <option value="Сдан">Сдан</option>
-              <option value="Не сдан">Не сдан</option>
+            <select id="integration-terms-filter">
+              <option value="all">Все условия</option>
+              <option value="Бартер">Бартер</option>
+              <option value="КМ">КМ</option>
             </select>
+            <input type="date" id="integration-date-filter" />
           </div>
           <div class="list-grid is-list" id="integration-list"></div>
         </section>
@@ -123,6 +124,8 @@
               Обязательные поля отмечены красной звёздочкой.
             </p>
           </div>
+        </div>
+        <div class="modal-close-row">
           <button class="icon-btn" data-close-modal="integration-modal">✕</button>
         </div>
         <div class="form-grid">
@@ -234,6 +237,8 @@
             <h3 id="integration-detail-title">Интеграция</h3>
             <p class="modal-subtitle">Карточка интеграции с возможностью редактирования.</p>
           </div>
+        </div>
+        <div class="modal-close-row">
           <button class="icon-btn" data-close-modal="integration-detail-modal">✕</button>
         </div>
         <div class="form-grid" id="integration-detail-fields"></div>
@@ -251,6 +256,8 @@
             <h3>Добавить блогера</h3>
             <p class="modal-subtitle">Новый блогер сразу появится в базе.</p>
           </div>
+        </div>
+        <div class="modal-close-row">
           <button class="icon-btn" data-close-modal="blogger-modal">✕</button>
         </div>
         <div class="form-grid">
