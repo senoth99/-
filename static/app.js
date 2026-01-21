@@ -21,6 +21,24 @@ const formatDate = (value) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ru-RU");
 };
 
+const statusIconMap = {
+  DELIVERED: "📦",
+  READY_FOR_PICKUP: "🏬",
+  IN_TRANSIT: "🚚",
+  ACCEPTED: "🕒",
+  CREATED: "📝",
+  PENDING_REGISTRATION: "⏳",
+  UNKNOWN: "❔",
+};
+
+const resolveStatusIcon = (shipment) => {
+  const code = (shipment.cdek_state || "").toUpperCase();
+  if (statusIconMap[code]) {
+    return statusIconMap[code];
+  }
+  return "🚚";
+};
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -135,7 +153,7 @@ function renderShipments() {
       <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
       <div class="meta">${shipment.last_location || "Локация неизвестна"}</div>
       <div class="meta">${formatDate(shipment.last_update)}</div>
-      <div class="shipment-truck">🚚</div>
+      <div class="shipment-truck">${resolveStatusIcon(shipment)}</div>
     `;
     grid.appendChild(card);
   });

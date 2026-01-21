@@ -280,13 +280,16 @@ def _parse_cdek_status(entity, track_number):
             "track_number": entity.get("cdek_number") or track_number,
             "status": {
                 "code": "UNKNOWN",
-                "name": "UNKNOWN",
+                "name": "Статус неизвестен",
                 "date_time": None,
                 "city": None,
             },
             "statuses": [],
         }
-    latest = statuses[-1] if statuses else {}
+    latest = max(
+        statuses,
+        key=lambda status: status.get("date_time") or "",
+    )
     return {
         "track_number": entity.get("cdek_number") or track_number,
         "status": {
