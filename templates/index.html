@@ -30,7 +30,7 @@
                   {{ "A" if role == "admin" else "S" }}
                 </span>
                 <span class="profile-meta">
-                  <span class="profile-name">Профиль</span>
+                  <span class="profile-name">{{ profile_name }}</span>
                   <span class="profile-role">{{ role_label }}</span>
                 </span>
               </span>
@@ -43,23 +43,40 @@
       </header>
       <main class="home-main">
         <section class="menu-panel">
-          <div class="menu-grid">
-            <a class="menu-card" href="/locations">
-              <div class="menu-icon">📍</div>
-              <div>
-                <h3>Точки продаж</h3>
-                <p class="subtitle">Остатки, продажи, выручка и поставки.</p>
-              </div>
+          <div class="menu-stack">
+            <a class="menu-slim" href="/operations">
+              <span class="menu-slim-title">Операционная работа</span>
+              <span class="menu-slim-subtitle">Трекер, база знаний и статистика.</span>
               <span class="menu-cta">Открыть →</span>
             </a>
-            <div class="menu-card menu-card--disabled" aria-disabled="true">
-              <div class="menu-icon">✨</div>
-              <div>
-                <h3>Работа с блогерами</h3>
-                <p class="subtitle">Планирование коллабораций и отчеты.</p>
+            <div class="menu-grid">
+              <a class="menu-card" href="/locations">
+                <div class="menu-icon">📍</div>
+                <div>
+                  <h3>Точки продаж</h3>
+                  <p class="subtitle">Остатки, продажи, выручка и поставки.</p>
+                </div>
+                <span class="menu-cta">Открыть →</span>
+              </a>
+              <div class="menu-card menu-card--disabled" aria-disabled="true">
+                <div class="menu-icon">✨</div>
+                <div>
+                  <h3>Работа с блогерами</h3>
+                  <p class="subtitle">Планирование коллабораций и отчеты.</p>
+                </div>
+                <span class="menu-cta">Недоступно</span>
               </div>
-              <span class="menu-cta">Недоступно</span>
             </div>
+            {% if role == "admin" %}
+              <a class="menu-card menu-card--wide menu-card--settings" href="/settings">
+                <div class="menu-icon">⚙️</div>
+                <div>
+                  <h3>Настройка CRM</h3>
+                  <p class="subtitle">Профили сотрудников, пароли и доступы.</p>
+                </div>
+                <span class="menu-cta">Перейти →</span>
+              </a>
+            {% endif %}
           </div>
         </section>
       </main>

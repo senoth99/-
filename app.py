@@ -6,6 +6,7 @@ import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
+from hashlib import sha256
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -85,6 +86,16 @@ def init_db():
                 last_status TEXT,
                 last_location TEXT,
                 last_update TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
             """
@@ -203,8 +214,8 @@ def parse_excel(path):
 
 
 def require_auth():
-    open_paths = {"/login", "/api/login", "/api/logout"}
-    protected_pages = {"/", "/locations", "/bloggers"}
+    open_paths = {"/login", "/api/login", "/api/logout", "/api/employees"}
+    protected_pages = {"/", "/locations", "/bloggers", "/operations", "/settings"}
     if request.path.startswith("/static"):
         return None
     if session.get("authed") and not is_auth_fresh():
@@ -240,10 +251,24 @@ def get_role_label(role):
     return "Админ" if role == ROLE_ADMIN else "Сотрудник"
 
 
+def get_profile_name():
+    if get_role() == ROLE_ADMIN:
+        return "Админ"
+    return session.get("employee_name") or "Сотрудник"
+
+
 def require_admin():
     if get_role() != ROLE_ADMIN:
         return jsonify({"error": "forbidden"}), 403
     return None
+
+
+def hash_password(password):
+    return sha256(password.encode("utf-8")).hexdigest()
+
+
+def verify_password(password, password_hash):
+    return hash_password(password) == password_hash
 
 
 class TrackingError(Exception):
@@ -436,6 +461,7 @@ def index():
         authed=True,
         role=role,
         role_label=get_role_label(role),
+        profile_name=get_profile_name(),
     )
 
 
@@ -456,6 +482,7 @@ def locations():
         authed=True,
         role=role,
         role_label=get_role_label(role),
+        profile_name=get_profile_name(),
     )
 
 
@@ -469,6 +496,37 @@ def bloggers():
         authed=True,
         role=role,
         role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+    )
+
+
+@app.route("/operations")
+def operations():
+    if not session.get("authed"):
+        return redirect("/")
+    role = get_role()
+    return render_template(
+        "operations.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+    )
+
+
+@app.route("/settings")
+def settings():
+    if not session.get("authed"):
+        return redirect("/")
+    if get_role() != ROLE_ADMIN:
+        return redirect("/")
+    role = get_role()
+    return render_template(
+        "settings.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
     )
 
 
@@ -478,17 +536,109 @@ def login():
     role = payload.get("role", ROLE_EMPLOYEE)
     if role not in {ROLE_ADMIN, ROLE_EMPLOYEE}:
         return jsonify({"ok": False, "error": "Неизвестная роль"}), 400
-    if payload.get("password") == PASSWORD:
-        session["authed"] = True
-        session["role"] = role
-        session["last_auth_at"] = datetime.utcnow().isoformat()
-        return jsonify({"ok": True, "role": role})
-    return jsonify({"ok": False, "error": "Неверный пароль"}), 401
+    password = (payload.get("password") or "").strip()
+    if role == ROLE_ADMIN:
+        if password == PASSWORD:
+            session["authed"] = True
+            session["role"] = role
+            session["employee_id"] = None
+            session["employee_name"] = None
+            session["last_auth_at"] = datetime.utcnow().isoformat()
+            return jsonify({"ok": True, "role": role})
+        return jsonify({"ok": False, "error": "Неверный пароль"}), 401
+
+    employee_id = payload.get("employee_id")
+    if not employee_id:
+        return jsonify({"ok": False, "error": "Выберите профиль"}), 400
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, name, password_hash FROM employees WHERE id = ?",
+            (employee_id,),
+        ).fetchone()
+    if not row or not verify_password(password, row["password_hash"]):
+        return jsonify({"ok": False, "error": "Неверный пароль"}), 401
+    session["authed"] = True
+    session["role"] = role
+    session["employee_id"] = row["id"]
+    session["employee_name"] = row["name"]
+    session["last_auth_at"] = datetime.utcnow().isoformat()
+    return jsonify({"ok": True, "role": role, "employee": row["name"]})
 
 
 @app.post("/api/logout")
 def logout():
     session.clear()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/employees")
+def list_employees():
+    is_public = request.args.get("public") == "true"
+    if not session.get("authed") and not is_public:
+        return jsonify({"error": "unauthorized"}), 401
+    if session.get("authed") and get_role() != ROLE_ADMIN and not is_public:
+        return jsonify({"error": "forbidden"}), 403
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, name, created_at FROM employees ORDER BY created_at DESC"
+        ).fetchall()
+    if is_public:
+        return jsonify([{"id": row["id"], "name": row["name"]} for row in rows])
+    return jsonify([dict(row) for row in rows])
+
+
+@app.post("/api/employees")
+def create_employee():
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    name = (payload.get("name") or "").strip()
+    password = (payload.get("password") or "").strip()
+    if not name or not password:
+        return jsonify({"error": "Заполните имя и пароль"}), 400
+    password_hash = hash_password(password)
+    created_at = datetime.utcnow().isoformat()
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "INSERT INTO employees (name, password_hash, created_at) VALUES (?, ?, ?)",
+                (name, password_hash, created_at),
+            )
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Профиль с таким именем уже существует"}), 400
+    return jsonify({"ok": True})
+
+
+@app.post("/api/employees/<int:employee_id>/password")
+def update_employee_password(employee_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    password = (payload.get("password") or "").strip()
+    if not password:
+        return jsonify({"error": "Введите новый пароль"}), 400
+    password_hash = hash_password(password)
+    with get_db() as conn:
+        result = conn.execute(
+            "UPDATE employees SET password_hash = ? WHERE id = ?",
+            (password_hash, employee_id),
+        )
+    if result.rowcount == 0:
+        return jsonify({"error": "Профиль не найден"}), 404
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/employees/<int:employee_id>")
+def delete_employee(employee_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    with get_db() as conn:
+        result = conn.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
+    if result.rowcount == 0:
+        return jsonify({"error": "Профиль не найден"}), 404
     return jsonify({"ok": True})
 
 

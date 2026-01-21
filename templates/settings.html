@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — Настройки</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="page-shell">
+      <header class="page-header">
+        <div class="brand">
+          <h1>CASHER CRM</h1>
+          <p>Настройка CRM</p>
+        </div>
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+        </div>
+      </header>
+
+      <main class="page-main">
+        <section class="ops-section">
+          <div class="ops-header">
+            <div>
+              <h2>Профили сотрудников</h2>
+              <p class="subtitle">
+                Создавайте профили, задавайте пароли и управляйте доступом.
+              </p>
+            </div>
+          </div>
+          <div class="ops-form">
+            <input type="text" id="employee-name" placeholder="Имя сотрудника" />
+            <input type="password" id="employee-password" placeholder="Пароль" />
+            <button class="primary" id="employee-add">Создать профиль</button>
+          </div>
+          <div class="ops-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>Создан</th>
+                  <th>Пароль</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="employee-table-body"></tbody>
+            </table>
+          </div>
+          <div class="error" id="employee-error"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/settings.js"></script>
+  </body>
+</html>

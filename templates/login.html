@@ -9,33 +9,57 @@
   </head>
   <body class="login-body">
     <div class="login-shell">
-      <div class="login-background" aria-hidden="true">
-        <span class="orb orb-1"></span>
-        <span class="orb orb-2"></span>
-        <span class="orb orb-3"></span>
-        <span class="orb orb-4"></span>
-      </div>
-
       <main class="login-main">
         <div class="login-card">
           <div class="login-header">
             <span class="login-badge">CRM-доступ</span>
             <h1>Вход в CASHER CRM</h1>
-            <p class="subtitle">Выберите профиль и введите пароль, чтобы перейти в меню.</p>
+            <p class="subtitle">Вход в 3 шага: роль → профиль → пароль.</p>
           </div>
-          <div class="role-picker" id="role-picker">
-            <button class="role-option selected" type="button" data-role="admin">
-              Админ
-            </button>
-            <button class="role-option" type="button" data-role="employee">
-              Сотрудник
-            </button>
+
+          <div class="login-stepper" aria-hidden="true">
+            <span class="login-stepper-item active" data-stepper="role">ВОЙТИ</span>
+            <span class="login-stepper-sep">→</span>
+            <span class="login-stepper-item" data-stepper="profile">выбор профиля</span>
+            <span class="login-stepper-sep">→</span>
+            <span class="login-stepper-item" data-stepper="password">ввод пароля</span>
           </div>
-          <label>
-            Пароль
-            <input type="password" id="login-password" placeholder="Введите пароль" />
-          </label>
-          <button class="primary" id="login-submit">Войти</button>
+
+          <div class="login-steps">
+            <section class="login-step" data-step="role">
+              <div class="role-picker" id="role-picker">
+                <button class="role-option selected" type="button" data-role="admin">
+                  Админ
+                </button>
+                <button class="role-option" type="button" data-role="employee">
+                  Сотрудник
+                </button>
+              </div>
+              <button class="primary" id="role-next">Продолжить</button>
+            </section>
+
+            <section class="login-step hidden" data-step="profile">
+              <div class="profile-picker">
+                <p class="subtitle">Выберите профиль сотрудника для входа.</p>
+                <div class="profile-grid" id="employee-profiles"></div>
+              </div>
+              <div class="step-actions">
+                <button class="ghost" id="profile-back">Назад</button>
+                <button class="primary" id="profile-next">Продолжить</button>
+              </div>
+            </section>
+
+            <section class="login-step hidden" data-step="password">
+              <label>
+                Пароль
+                <input type="password" id="login-password" placeholder="Введите пароль" />
+              </label>
+              <div class="step-actions">
+                <button class="ghost" id="password-back">Назад</button>
+                <button class="primary" id="login-submit">Войти</button>
+              </div>
+            </section>
+          </div>
           <div class="error" id="login-error"></div>
         </div>
       </main>
