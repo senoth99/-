@@ -505,7 +505,9 @@ def add_shipment():
         or payload.get("track_number")
         or ""
     ).strip()
-    cdek_uuid = (payload.get("cdek_uuid") or "").strip() or None
+    internal_number = display_number
+    cdek_number = None
+    cdek_uuid = (payload.get("cdek_uuid") or display_number).strip() or None
     if not origin_label or not destination_label or not display_number:
         return jsonify({"error": "Заполните все поля поставки"}), 400
     status_data = {
@@ -520,14 +522,14 @@ def add_shipment():
             INSERT INTO shipments
             (origin_label, destination_label, internal_number, display_number, cdek_number, cdek_uuid, cdek_state,
              last_status, last_location, last_update, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 origin_label,
                 destination_label,
+                internal_number,
                 display_number,
-                display_number,
-                None,
+                cdek_number,
                 cdek_uuid,
                 cdek_state,
                 status_data.get("status"),
