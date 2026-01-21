@@ -1029,7 +1029,7 @@ td {
 }
 
 .login-step {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 16px;
   background: #f8fafc;
@@ -1037,10 +1037,6 @@ td {
   border: 1px solid #e2e8f0;
   padding: 16px;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-}
-
-.login-step.active {
-  display: flex;
 }
 
 .profile-grid {

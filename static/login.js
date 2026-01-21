@@ -12,10 +12,12 @@ async function api(path, options = {}) {
   return response.json();
 }
 
-const steps = ["role", "profile", "password"];
-let currentStep = "role";
-let selectedRole = "admin";
-let selectedEmployeeId = null;
+const state = {
+  step: 1,
+  role: null,
+  profileId: null,
+  password: "",
+};
 
 function setError(message = "") {
   const error = qs("login-error");
@@ -24,20 +26,42 @@ function setError(message = "") {
   }
 }
 
-function setStep(step) {
-  currentStep = step;
-  document.querySelectorAll(".login-step").forEach((panel) => {
-    panel.classList.toggle("active", panel.dataset.step === step);
-  });
+function updateStepper(step) {
+  const stepKey = step === 1 ? "role" : step === 2 ? "profile" : "password";
   document.querySelectorAll(".login-stepper-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.stepper === step);
+    item.classList.toggle("active", item.dataset.stepper === stepKey);
   });
 }
 
-function getRole() {
-  return (
-    document.querySelector(".role-option.selected")?.dataset?.role || "employee"
-  );
+function setStep(step) {
+  state.step = step;
+  updateStepper(step);
+  renderStep();
+}
+
+function goToStep1() {
+  setError();
+  setStep(1);
+}
+
+async function goToStep2() {
+  setError();
+  if (!state.role) {
+    setError("Выберите роль для входа.");
+    return;
+  }
+  state.profileId = null;
+  await fetchProfiles();
+  setStep(2);
+}
+
+function goToStep3() {
+  setError();
+  if (!state.profileId) {
+    setError("Выберите профиль сотрудника.");
+    return;
+  }
+  setStep(3);
 }
 
 async function fetchProfiles() {
@@ -56,6 +80,9 @@ async function fetchProfiles() {
       button.className = "profile-card";
       button.dataset.employeeId = profile.id;
       button.textContent = profile.name;
+      if (state.profileId === profile.id) {
+        button.classList.add("selected");
+      }
       container.appendChild(button);
     });
   } catch (err) {
@@ -63,17 +90,13 @@ async function fetchProfiles() {
   }
 }
 
-async function handleLogin() {
-  const password = qs("login-password")?.value.trim();
-  setError();
+async function login(role, profileId, password) {
   try {
     const payload = {
       password,
-      role: selectedRole,
+      role,
+      employee_id: profileId,
     };
-    if (selectedRole === "employee") {
-      payload.employee_id = selectedEmployeeId;
-    }
     await api("/api/login", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -84,69 +107,209 @@ async function handleLogin() {
   }
 }
 
-function init() {
-  const loginBtn = qs("login-submit");
-  const rolePicker = qs("role-picker");
-  const roleNext = qs("role-next");
-  const profileBack = qs("profile-back");
-  const profileNext = qs("profile-next");
-  const passwordBack = qs("password-back");
-  const profilesGrid = qs("employee-profiles");
+function createRoleStep() {
+  const section = document.createElement("section");
+  section.className = "login-step";
 
-  rolePicker?.addEventListener("click", (event) => {
-    const target = event.target;
-    const option = target.closest(".role-option");
-    if (!option) return;
-    document.querySelectorAll(".role-option").forEach((button) => {
-      button.classList.toggle("selected", button === option);
-    });
-    selectedRole = getRole();
-  });
+  const subtitle = document.createElement("p");
+  subtitle.className = "subtitle";
+  subtitle.textContent = "Выберите роль для входа в систему.";
 
-  roleNext?.addEventListener("click", async () => {
-    setError();
-    selectedRole = getRole();
-    if (selectedRole === "employee") {
-      selectedEmployeeId = null;
-      await fetchProfiles();
-      setStep("profile");
-      return;
+  const picker = document.createElement("div");
+  picker.className = "role-picker";
+
+  const adminButton = document.createElement("button");
+  adminButton.type = "button";
+  adminButton.className = "role-option";
+  adminButton.dataset.role = "admin";
+  adminButton.textContent = "Админ";
+
+  const employeeButton = document.createElement("button");
+  employeeButton.type = "button";
+  employeeButton.className = "role-option";
+  employeeButton.dataset.role = "employee";
+  employeeButton.textContent = "Сотрудник";
+
+  [adminButton, employeeButton].forEach((button) => {
+    if (state.role === button.dataset.role) {
+      button.classList.add("selected");
     }
-    setStep("password");
+    button.addEventListener("click", () => {
+      state.role = button.dataset.role;
+      [adminButton, employeeButton].forEach((item) => {
+        item.classList.toggle("selected", item === button);
+      });
+      nextButton.disabled = !state.role;
+    });
   });
 
-  profilesGrid?.addEventListener("click", (event) => {
+  picker.appendChild(adminButton);
+  picker.appendChild(employeeButton);
+
+  const actions = document.createElement("div");
+  actions.className = "step-actions step-actions--stack";
+
+  const nextButton = document.createElement("button");
+  nextButton.type = "button";
+  nextButton.className = "primary button-wide";
+  nextButton.textContent = "Продолжить";
+  nextButton.disabled = !state.role;
+  nextButton.addEventListener("click", () => {
+    void goToStep2();
+  });
+
+  actions.appendChild(nextButton);
+  section.appendChild(subtitle);
+  section.appendChild(picker);
+  section.appendChild(actions);
+
+  return section;
+}
+
+function createProfileStep() {
+  const section = document.createElement("section");
+  section.className = "login-step";
+
+  const picker = document.createElement("div");
+  picker.className = "profile-picker";
+
+  const subtitle = document.createElement("p");
+  subtitle.className = "subtitle";
+  subtitle.textContent = "Выберите профиль сотрудника для входа.";
+
+  const grid = document.createElement("div");
+  grid.className = "profile-grid";
+  grid.id = "employee-profiles";
+
+  grid.addEventListener("click", (event) => {
     const card = event.target.closest(".profile-card");
     if (!card) return;
-    selectedEmployeeId = card.dataset.employeeId;
-    document.querySelectorAll(".profile-card").forEach((button) => {
+    state.profileId = card.dataset.employeeId;
+    grid.querySelectorAll(".profile-card").forEach((button) => {
       button.classList.toggle("selected", button === card);
     });
+    nextButton.disabled = !state.profileId;
   });
 
-  profileBack?.addEventListener("click", () => {
-    setStep("role");
+  picker.appendChild(subtitle);
+  picker.appendChild(grid);
+
+  const actions = document.createElement("div");
+  actions.className = "step-actions step-actions--stack";
+
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = "secondary button-wide";
+  backButton.textContent = "Назад";
+  backButton.addEventListener("click", goToStep1);
+
+  const nextButton = document.createElement("button");
+  nextButton.type = "button";
+  nextButton.className = "primary button-wide";
+  nextButton.textContent = "Далее";
+  nextButton.disabled = !state.profileId;
+  nextButton.addEventListener("click", goToStep3);
+
+  actions.appendChild(backButton);
+  actions.appendChild(nextButton);
+
+  section.appendChild(picker);
+  section.appendChild(actions);
+
+  void fetchProfiles();
+
+  return section;
+}
+
+function createPasswordStep() {
+  const section = document.createElement("section");
+  section.className = "login-step";
+
+  const wrapper = document.createElement("div");
+
+  const subtitle = document.createElement("p");
+  subtitle.className = "subtitle";
+  subtitle.textContent = "Введите пароль доступа.";
+
+  const label = document.createElement("label");
+  label.textContent = "Пароль";
+
+  const input = document.createElement("input");
+  input.type = "password";
+  input.placeholder = "Введите пароль";
+  input.value = state.password;
+
+  input.addEventListener("input", (event) => {
+    state.password = event.target.value.trim();
+    submitButton.disabled = !state.password;
   });
 
-  profileNext?.addEventListener("click", () => {
+  label.appendChild(input);
+  wrapper.appendChild(subtitle);
+  wrapper.appendChild(label);
+
+  const actions = document.createElement("div");
+  actions.className = "step-actions step-actions--stack";
+
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = "secondary button-wide";
+  backButton.textContent = "Назад";
+  backButton.addEventListener("click", () => {
     setError();
-    if (!selectedEmployeeId) {
-      setError("Выберите профиль сотрудника.");
-      return;
-    }
-    setStep("password");
+    setStep(2);
   });
 
-  passwordBack?.addEventListener("click", () => {
-    if (selectedRole === "employee") {
-      setStep("profile");
+  const submitButton = document.createElement("button");
+  submitButton.type = "button";
+  submitButton.className = "primary button-wide";
+  submitButton.textContent = "Войти";
+  submitButton.disabled = !state.password;
+  submitButton.addEventListener("click", () => {
+    setError();
+    if (!state.password) {
+      setError("Введите пароль.");
       return;
     }
-    setStep("role");
+    if (!state.role || !state.profileId) {
+      setError("Вернитесь и заполните предыдущие шаги.");
+      return;
+    }
+    void login(state.role, state.profileId, state.password);
   });
 
-  loginBtn?.addEventListener("click", handleLogin);
-  setStep(currentStep);
+  actions.appendChild(backButton);
+  actions.appendChild(submitButton);
+
+  section.appendChild(wrapper);
+  section.appendChild(actions);
+
+  return section;
+}
+
+function renderStep() {
+  const container = qs("login-steps");
+  if (!container) return;
+  container.innerHTML = "";
+
+  let stepNode = null;
+
+  if (state.step === 1) {
+    stepNode = createRoleStep();
+  } else if (state.step === 2) {
+    stepNode = createProfileStep();
+  } else if (state.step === 3) {
+    stepNode = createPasswordStep();
+  }
+
+  if (stepNode) {
+    container.appendChild(stepNode);
+  }
+}
+
+function init() {
+  updateStepper(state.step);
+  renderStep();
 }
 
 init();

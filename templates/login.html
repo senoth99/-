@@ -24,47 +24,7 @@
             <span class="login-stepper-item" data-stepper="password">Шаг 3</span>
           </div>
 
-          <div class="login-steps">
-            <section class="login-step active" data-step="role">
-              <p class="subtitle">Выберите роль для входа в систему.</p>
-              <div class="role-picker" id="role-picker">
-                <button class="role-option selected" type="button" data-role="admin">
-                  Админ
-                </button>
-                <button class="role-option" type="button" data-role="employee">
-                  Сотрудник
-                </button>
-              </div>
-              <div class="step-actions step-actions--stack">
-                <button class="primary button-wide" id="role-next">Продолжить</button>
-              </div>
-            </section>
-
-            <section class="login-step" data-step="profile">
-              <div class="profile-picker">
-                <p class="subtitle">Выберите профиль сотрудника для входа.</p>
-                <div class="profile-grid" id="employee-profiles"></div>
-              </div>
-              <div class="step-actions step-actions--stack">
-                <button class="secondary button-wide" id="profile-back">Назад</button>
-                <button class="primary button-wide" id="profile-next">Далее</button>
-              </div>
-            </section>
-
-            <section class="login-step" data-step="password">
-              <div>
-                <p class="subtitle">Введите пароль доступа.</p>
-                <label>
-                  Пароль
-                  <input type="password" id="login-password" placeholder="Введите пароль" />
-                </label>
-              </div>
-              <div class="step-actions step-actions--stack">
-                <button class="secondary button-wide" id="password-back">Назад</button>
-                <button class="primary button-wide" id="login-submit">Войти</button>
-              </div>
-            </section>
-          </div>
+          <div class="login-steps" id="login-steps"></div>
           <div class="error" id="login-error"></div>
         </div>
       </main>
