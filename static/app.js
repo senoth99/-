@@ -136,7 +136,7 @@ function renderShipments() {
       <div class="meta">${shipment.last_location || "Локация неизвестна"}</div>
       <div class="meta">${formatDate(shipment.last_update)}</div>
       <div class="meta shipment-id">${
-        shipment.cdek_uuid ? `UUID: ${shipment.cdek_uuid}` : "UUID: —"
+        shipment.cdek_uuid ? `Номер ИМ: ${shipment.cdek_uuid}` : "Номер ИМ: —"
       }</div>
       <div class="shipment-truck">🚚</div>
     `;
@@ -202,7 +202,6 @@ function openShipmentModal() {
     destination.appendChild(destinationOption);
   });
   qs("shipment-display-number").value = "";
-  qs("shipment-cdek-uuid").value = "";
   qs("shipment-error").textContent = "";
   openModal("shipment-modal");
 }
@@ -211,7 +210,7 @@ async function handleAddShipment() {
   const origin = qs("shipment-origin").value;
   const destination = qs("shipment-destination").value;
   const displayNumber = qs("shipment-display-number").value.trim();
-  const cdekUuid = qs("shipment-cdek-uuid").value.trim();
+  const cdekUuid = displayNumber;
   const error = qs("shipment-error");
   error.textContent = "";
   try {
