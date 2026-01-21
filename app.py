@@ -553,12 +553,15 @@ def add_shipment():
     cdek_uuid = None
     if not origin_label or not destination_label or not display_number:
         return jsonify({"error": "Заполните все поля поставки"}), 400
-    status_data = {
-        "status": "⏳ Ожидает регистрации в CDEK",
-        "location": None,
-        "timestamp": None,
-    }
-    cdek_state = "PENDING_REGISTRATION"
+    status_data, error = resolve_shipment_status(display_number)
+    if error:
+        status_data = {
+            "status": "⏳ Ожидает регистрации в CDEK",
+            "location": None,
+            "timestamp": None,
+            "code": "PENDING_REGISTRATION",
+        }
+    cdek_state = status_data.get("code") or "PENDING_REGISTRATION"
     with get_db() as conn:
         conn.execute(
             """
