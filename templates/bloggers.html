@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — Работа с блогерами</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body data-authed="{{ 'true' if authed else 'false' }}">
+    <div class="page-shell">
+      <header class="page-header">
+        <div class="brand">
+          <h1>CASHER CRM</h1>
+          <p>Контроль оффлайн продаж</p>
+        </div>
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+          <button class="ghost" id="logout-btn">Выйти</button>
+        </div>
+      </header>
+
+      <main class="page-main">
+        <section class="page-hero">
+          <div class="hero-card">
+            <h2>Работа с блогерами</h2>
+            <p class="subtitle">
+              Мы готовим раздел для управления коллаборациями, графиком публикаций и
+              аналитикой. Сейчас это чистый холст для будущей функциональности.
+            </p>
+          </div>
+          <div class="placeholder-grid">
+            <div class="placeholder-card">
+              <div class="placeholder-icon">🎯</div>
+              <h3>Планы кампаний</h3>
+              <p class="subtitle">Шаблоны договоренностей и трекинг статусов.</p>
+            </div>
+            <div class="placeholder-card">
+              <div class="placeholder-icon">📊</div>
+              <h3>Отчеты</h3>
+              <p class="subtitle">Метрики охвата, переходов и эффективности.</p>
+            </div>
+            <div class="placeholder-card">
+              <div class="placeholder-icon">🗂️</div>
+              <h3>База блогеров</h3>
+              <p class="subtitle">Контакты, форматы, условия сотрудничества.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/home.js"></script>
+  </body>
+</html>

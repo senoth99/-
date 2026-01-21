@@ -9,7 +9,7 @@ import urllib.request
 from datetime import datetime, timedelta
 
 import pandas as pd
-from flask import Flask, jsonify, render_template, request, send_file, session
+from flask import Flask, jsonify, redirect, render_template, request, send_file, session
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -201,10 +201,13 @@ def parse_excel(path):
 
 def require_auth():
     open_paths = {"/", "/api/login", "/api/logout"}
+    protected_pages = {"/locations", "/bloggers"}
     if request.path.startswith("/static"):
         return None
     if request.path in open_paths:
         return None
+    if request.path in protected_pages and not session.get("authed"):
+        return redirect("/")
     if not session.get("authed"):
         return jsonify({"error": "unauthorized"}), 401
     return None
@@ -393,6 +396,20 @@ app.before_request(require_auth)
 @app.route("/")
 def index():
     return render_template("index.html", authed=bool(session.get("authed")))
+
+
+@app.route("/locations")
+def locations():
+    if not session.get("authed"):
+        return redirect("/")
+    return render_template("locations.html", authed=True)
+
+
+@app.route("/bloggers")
+def bloggers():
+    if not session.get("authed"):
+        return redirect("/")
+    return render_template("bloggers.html", authed=True)
 
 
 @app.post("/api/login")

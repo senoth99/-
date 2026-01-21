@@ -8,205 +8,61 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body data-authed="{{ 'true' if authed else 'false' }}">
-    <div id="app" class="{{ '' if authed else 'hidden' }}">
-      <aside class="sidebar">
+    <div class="home-shell">
+      <header class="home-header">
         <div class="brand">
           <h1>CASHER CRM</h1>
-          <p>Контроль продаж</p>
+          <p>Контроль оффлайн продаж</p>
         </div>
-        <button class="primary" id="add-location-btn">Добавить точку</button>
-        <button class="ghost" id="add-shipment-btn">Новая поставка</button>
-        <button class="ghost" id="export-btn">Экспорт Excel</button>
-        <div class="hint">
-          <h3>Быстрые подсказки</h3>
-          <ul>
-            <li>Данные загружаются из Excel или CSV.</li>
-            <li>Колонки распознаются автоматически.</li>
-            <li>Все изменения сохраняются.</li>
-          </ul>
-        </div>
-      </aside>
+        <button class="ghost {{ '' if authed else 'hidden' }}" id="logout-btn">Выйти</button>
+      </header>
 
-      <main class="main">
-        <header class="topbar">
-          <div>
-            <h2>Точки продаж</h2>
-            <span class="subtitle">Следите за остатками, продажами и выручкой</span>
+      <main class="home-main">
+        <section class="hero">
+          <div class="hero-badge">CRM-панель</div>
+          <h2>Выберите направление и управляйте продажами в одном окне</h2>
+          <p class="subtitle">
+            Основная страница помогает быстро перейти к ключевым сценариям.
+            После входа доступны все модули, аккуратно собранные в меню.
+          </p>
+        </section>
+
+        <section class="auth-panel {{ '' if not authed else 'hidden' }}" id="auth-panel">
+          <div class="panel-card">
+            <h3>Вход в CRM</h3>
+            <p class="subtitle">Введите пароль, чтобы открыть меню.</p>
+            <label>
+              Пароль
+              <input type="password" id="login-password" placeholder="Введите пароль" />
+            </label>
+            <button class="primary" id="login-submit">Войти</button>
+            <div class="error" id="login-error"></div>
           </div>
-          <button class="ghost" id="logout-btn">Выйти</button>
-        </header>
+        </section>
 
-        <section class="grid" id="location-grid"></section>
-
-        <section class="section">
-          <div class="section-header">
-            <h2>Отслеживание поставок</h2>
-            <span class="subtitle">Статусы CDEK и движение товара</span>
+        <section class="menu-panel {{ '' if authed else 'hidden' }}" id="menu-panel">
+          <div class="menu-grid">
+            <a class="menu-card" href="/locations">
+              <div class="menu-icon">📍</div>
+              <div>
+                <h3>Точки продаж</h3>
+                <p class="subtitle">Остатки, продажи, выручка и поставки.</p>
+              </div>
+              <span class="menu-cta">Открыть →</span>
+            </a>
+            <a class="menu-card" href="/bloggers">
+              <div class="menu-icon">✨</div>
+              <div>
+                <h3>Работа с блогерами</h3>
+                <p class="subtitle">Планирование коллабораций и отчеты.</p>
+              </div>
+              <span class="menu-cta">Открыть →</span>
+            </a>
           </div>
-          <div class="grid" id="shipment-grid"></div>
         </section>
       </main>
     </div>
 
-    <div class="modal hidden" id="login-modal">
-      <div class="modal-card">
-        <h2>Вход в CRM</h2>
-        <p>Доступ только по секретному паролю.</p>
-        <input type="password" id="login-password" placeholder="Пароль" />
-        <button class="primary" id="login-submit">Войти</button>
-        <div class="error" id="login-error"></div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="location-modal">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h2>Новая точка продаж</h2>
-          <button class="icon-btn" data-close="location-modal">×</button>
-        </div>
-        <label>
-          Название
-          <input type="text" id="location-name" placeholder="Например, ТЦ Север" />
-        </label>
-        <label>
-          Адрес
-          <input type="text" id="location-address" placeholder="Улица, дом" />
-        </label>
-        <button class="primary" id="location-save">Сохранить</button>
-        <div class="error" id="location-error"></div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="upload-modal">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h2>Загрузить Excel</h2>
-          <button class="icon-btn" data-close="upload-modal">×</button>
-        </div>
-        <div class="upload-info" id="upload-location"></div>
-        <input type="file" id="upload-file" accept=".xlsx,.xls,.csv" />
-        <button class="primary" id="upload-submit">Импортировать</button>
-        <div class="error" id="upload-error"></div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="records-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
-          <h2 id="records-title">Детали точки</h2>
-          <button class="icon-btn" data-close="records-modal">×</button>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Товар</th>
-                <th>Остаток</th>
-                <th>Продажи (шт.)</th>
-                <th>Выручка</th>
-                <th>Дата</th>
-                <th>Файл</th>
-              </tr>
-            </thead>
-            <tbody id="records-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="shipment-modal">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h2>Добавить поставку</h2>
-          <button class="icon-btn" data-close="shipment-modal">×</button>
-        </div>
-        <label>
-          Откуда
-          <select id="shipment-origin"></select>
-        </label>
-        <label>
-          Куда
-          <select id="shipment-destination"></select>
-        </label>
-        <label>
-          Трек-номер СДЭК
-          <input type="text" id="shipment-display-number" placeholder="Например, 10213725494" />
-        </label>
-        <button class="primary" id="shipment-save">Сохранить</button>
-        <div class="error" id="shipment-error"></div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="shipment-details-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
-          <div>
-            <h2 id="shipment-detail-title">Поставка</h2>
-            <div class="subtitle" id="shipment-detail-route"></div>
-          </div>
-          <button class="icon-btn" data-close="shipment-details-modal">×</button>
-        </div>
-        <div class="shipment-detail-actions">
-          <button
-            class="icon-btn success"
-            id="shipment-detail-refresh"
-            data-refresh=""
-            aria-label="Обновить"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M20 12a8 8 0 1 1-2.34-5.66"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M20 6v6h-6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-          <button
-            class="icon-btn danger"
-            id="shipment-detail-delete"
-            data-delete=""
-            aria-label="Удалить"
-          >
-            ×
-          </button>
-          <a
-            class="cdek-button"
-            id="shipment-cdek-link"
-            href="https://www.cdek.ru/ru/tracking"
-            target="_blank"
-            rel="noopener"
-          >
-            <span class="cdek-logo">CDEK</span>
-            Открыть в СДЭК
-          </a>
-        </div>
-        <div class="detail-section">
-          <h3>Основная информация</h3>
-          <div class="detail-grid" id="shipment-detail-main"></div>
-        </div>
-        <div class="detail-section">
-          <h3>Дополнительная информация</h3>
-          <div class="detail-grid" id="shipment-detail-extra"></div>
-        </div>
-        <div class="detail-section">
-          <h3>История статусов</h3>
-          <div class="status-list" id="shipment-detail-statuses"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="toast-container" id="toast-container" aria-live="polite"></div>
-
-    <script src="/static/app.js"></script>
+    <script src="/static/home.js"></script>
   </body>
 </html>

@@ -10,11 +10,6 @@ const qs = (id) => document.getElementById(id);
 
 const openModal = (id) => modal(id).classList.remove("hidden");
 const closeModal = (id) => modal(id).classList.add("hidden");
-const setAppVisibility = (isVisible) => {
-  const app = qs("app");
-  if (!app) return;
-  app.classList.toggle("hidden", !isVisible);
-};
 
 const formatNumber = (value) =>
   new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(
@@ -163,8 +158,7 @@ async function api(path, options = {}) {
     ...options,
   });
   if (response.status === 401) {
-    openModal("login-modal");
-    setAppVisibility(false);
+    window.location.href = "/";
     throw new Error("unauthorized");
   }
   if (!response.ok) {
@@ -442,24 +436,6 @@ async function openShipmentDetails(shipmentId) {
   }
 }
 
-async function handleLogin() {
-  const password = qs("login-password").value.trim();
-  const error = qs("login-error");
-  error.textContent = "";
-  try {
-    await api("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ password }),
-    });
-    closeModal("login-modal");
-    setAppVisibility(true);
-    await loadLocations();
-    await loadShipments();
-  } catch (err) {
-    error.textContent = err.message;
-  }
-}
-
 async function handleAddLocation() {
   const name = qs("location-name").value.trim();
   const address = qs("location-address").value.trim();
@@ -653,14 +629,12 @@ function registerEvents() {
   qs("add-location-btn").addEventListener("click", () => openModal("location-modal"));
   qs("add-shipment-btn").addEventListener("click", openShipmentModal);
   qs("export-btn").addEventListener("click", exportExcel);
-  qs("login-submit").addEventListener("click", handleLogin);
   qs("location-save").addEventListener("click", handleAddLocation);
   qs("shipment-save").addEventListener("click", handleAddShipment);
   qs("upload-submit").addEventListener("click", submitUpload);
   qs("logout-btn").addEventListener("click", async () => {
     await api("/api/logout", { method: "POST" });
-    setAppVisibility(false);
-    openModal("login-modal");
+    window.location.href = "/";
   });
 
   document.addEventListener("click", (event) => {
@@ -702,8 +676,7 @@ async function init() {
   registerEvents();
   const isAuthed = document.body?.dataset?.authed === "true";
   if (!isAuthed) {
-    setAppVisibility(false);
-    openModal("login-modal");
+    window.location.href = "/";
     return;
   }
   try {
