@@ -1,10 +1,8 @@
-import json
 import os
 import re
 import sqlite3
 import urllib.parse
-import urllib.request
-from urllib.error import HTTPError, URLError
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -23,13 +21,6 @@ app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 app.config["UPLOAD_DIR"] = UPLOAD_DIR
 
 PASSWORD = os.environ.get("APP_PASSWORD", "admin")
-CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
-CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
-CDEK_API_BASE = os.environ.get("CDEK_API_BASE", "https://api.cdek.ru/v2")
-
-_CDEK_TOKEN = None
-_CDEK_TOKEN_EXPIRES_AT = None
-
 CDEK_TRACKING_URL = "https://lk.cdek.ru/order-history/trace?orderNumber={track_number}"
 CDEK_TRACKING_CACHE_TTL = timedelta(minutes=8)
 CDEK_TRACKING_MIN_INTERVAL = timedelta(seconds=4)
@@ -98,6 +89,15 @@ CDEK_TRACKING_SELECTORS = {
         ".order-status__location",
         ".current-city",
     ],
+}
+
+TRACKING_JSON_HINTS = {
+    "status": {"status", "state", "status_name", "statusName", "statusTitle"},
+    "events": {"events", "history", "statuses", "timeline", "steps", "operations"},
+    "city": {"city", "city_name", "cityName", "location", "location_name", "locationName"},
+    "from_city": {"from_city", "sender_city", "origin_city", "city_from", "fromCity"},
+    "to_city": {"to_city", "receiver_city", "destination_city", "city_to", "toCity"},
+    "number": {"order_number", "orderNumber", "track_number", "trackingNumber", "number"},
 }
 
 _CDEK_TRACKING_CACHE = {}
@@ -283,122 +283,6 @@ def require_auth():
     return None
 
 
-def cdek_get_token():
-    global _CDEK_TOKEN, _CDEK_TOKEN_EXPIRES_AT
-    if _CDEK_TOKEN and _CDEK_TOKEN_EXPIRES_AT:
-        if datetime.utcnow() < _CDEK_TOKEN_EXPIRES_AT:
-            return _CDEK_TOKEN, None
-    if not CDEK_CLIENT_ID or not CDEK_CLIENT_SECRET:
-        return None, "Не настроены учетные данные CDEK"
-    payload = urllib.parse.urlencode(
-        {
-            "grant_type": "client_credentials",
-            "client_id": CDEK_CLIENT_ID,
-            "client_secret": CDEK_CLIENT_SECRET,
-        }
-    ).encode("utf-8")
-    request_token = urllib.request.Request(
-        f"{CDEK_API_BASE}/oauth/token",
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request_token, timeout=10) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            token = data.get("access_token")
-            expires_in = data.get("expires_in")
-            if token and expires_in:
-                _CDEK_TOKEN = token
-                _CDEK_TOKEN_EXPIRES_AT = datetime.utcnow() + timedelta(
-                    seconds=max(int(expires_in) - 30, 0)
-                )
-            return token, None
-    except Exception as exc:
-        return None, f"Ошибка авторизации CDEK: {exc}"
-
-
-def cdek_request(path):
-    token, error = cdek_get_token()
-    if error:
-        return None, None, error
-    request_data = urllib.request.Request(
-        f"{CDEK_API_BASE}{path}",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(request_data, timeout=10) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            return data, response.status, None
-    except HTTPError as exc:
-        error_body = None
-        try:
-            error_body = exc.read().decode("utf-8")
-        except Exception:
-            error_body = None
-        return None, exc.code, f"HTTP Error {exc.code}: {exc.reason}. {error_body or ''}".strip()
-    except URLError as exc:
-        return None, None, f"Ошибка подключения к CDEK: {exc}"
-    except Exception as exc:
-        return None, None, f"Ошибка получения статуса CDEK: {exc}"
-
-
-def extract_cdek_status(order_data):
-    if not isinstance(order_data, dict):
-        return None
-    if isinstance(order_data.get("entity"), dict):
-        order_data = order_data["entity"]
-    status = order_data.get("status")
-    if isinstance(status, dict):
-        location = (
-            status.get("city")
-            or status.get("city_name")
-            or status.get("location")
-            or order_data.get("city")
-        )
-        return {
-            "status": status.get("name") or status.get("code") or status.get("status"),
-            "location": location,
-            "timestamp": status.get("date_time")
-            or status.get("date")
-            or order_data.get("status_date_time"),
-        }
-    statuses = order_data.get("statuses") or []
-    if statuses:
-        latest = statuses[-1]
-        location = (
-            latest.get("city")
-            or latest.get("city_name")
-            or latest.get("location")
-        )
-        return {
-            "status": latest.get("name") or latest.get("status") or latest.get("code"),
-            "location": location,
-            "timestamp": latest.get("date_time") or latest.get("date"),
-        }
-    return None
-
-
-def cdek_get_status(cdek_uuid: str):
-    order_data, status, error = cdek_request(
-        f"/orders/{urllib.parse.quote(cdek_uuid)}"
-    )
-    if error:
-        if status == 410:
-            return None, "CDEK: неверный тип идентификатора"
-        if status == 404:
-            return None, "CDEK: заказ не найден"
-        return None, error
-    status_payload = extract_cdek_status(order_data)
-    if not status_payload:
-        return None, "Статусы поставки не найдены"
-    return status_payload, None
-
-
 class TrackingError(Exception):
     def __init__(self, code, details=None):
         super().__init__(details or code)
@@ -406,10 +290,165 @@ class TrackingError(Exception):
         self.details = details or code
 
 
+@dataclass
+class TrackingCandidate:
+    score: int
+    payload: dict
+
+
 def _normalize_text(value):
     if not value:
         return ""
     return " ".join(str(value).split())
+
+
+def _parse_iso_date(value):
+    if not value:
+        return None
+    raw = _normalize_text(value)
+    if "T" in raw:
+        cleaned = raw.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(cleaned)
+            return parsed.date().isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_city_value(value):
+    if not value:
+        return None
+    if isinstance(value, dict):
+        for key in TRACKING_JSON_HINTS["city"]:
+            if key in value and value[key]:
+                return _normalize_text(value[key])
+        if "name" in value:
+            return _normalize_text(value["name"])
+    return _normalize_text(value)
+
+
+def _extract_from_to(payload):
+    from_city = None
+    to_city = None
+    for key in TRACKING_JSON_HINTS["from_city"]:
+        if key in payload:
+            from_city = _normalize_city_value(payload.get(key))
+            break
+    for key in TRACKING_JSON_HINTS["to_city"]:
+        if key in payload:
+            to_city = _normalize_city_value(payload.get(key))
+            break
+    if not from_city and isinstance(payload.get("from"), dict):
+        from_city = _normalize_city_value(payload["from"].get("city") or payload["from"].get("name"))
+    if not to_city and isinstance(payload.get("to"), dict):
+        to_city = _normalize_city_value(payload["to"].get("city") or payload["to"].get("name"))
+    return from_city, to_city
+
+
+def _parse_tracking_events(events_payload):
+    events = []
+    if not isinstance(events_payload, list):
+        return events
+    for idx, item in enumerate(events_payload):
+        if not isinstance(item, dict):
+            continue
+        title = None
+        for key in ("title", "status", "status_name", "statusName", "state", "name", "description"):
+            if item.get(key):
+                title = _normalize_text(item.get(key))
+                break
+        date_raw = (
+            item.get("date_time")
+            or item.get("dateTime")
+            or item.get("date")
+            or item.get("timestamp")
+            or item.get("created_at")
+            or item.get("createdAt")
+        )
+        parsed_date = _parse_iso_date(date_raw) or _parse_date(date_raw)
+        city = _normalize_city_value(
+            item.get("city")
+            or item.get("city_name")
+            or item.get("location")
+            or item.get("location_name")
+        )
+        if not title and not parsed_date and not city:
+            continue
+        events.append(
+            {
+                "code": _status_code_from_title(title, idx) if title else f"status_{idx + 1}",
+                "title": title or "—",
+                "date": parsed_date,
+                "city": city or "—",
+            }
+        )
+    return events
+
+
+def _collect_tracking_candidates(payload):
+    candidates = []
+    stack = [payload]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            keys = set(node.keys())
+            score = 0
+            if keys & TRACKING_JSON_HINTS["events"]:
+                score += 2
+            if keys & TRACKING_JSON_HINTS["status"]:
+                score += 2
+            if keys & TRACKING_JSON_HINTS["city"]:
+                score += 1
+            if score:
+                candidates.append(TrackingCandidate(score=score, payload=node))
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return sorted(candidates, key=lambda item: item.score, reverse=True)
+
+
+def _parse_tracking_payload(payload, track_number):
+    if not isinstance(payload, (dict, list)):
+        return None
+    candidates = _collect_tracking_candidates(payload)
+    for candidate in candidates:
+        data = candidate.payload
+        events_payload = None
+        for key in TRACKING_JSON_HINTS["events"]:
+            if key in data:
+                events_payload = data.get(key)
+                break
+        events = _parse_tracking_events(events_payload)
+        if not events:
+            continue
+        status_value = None
+        for key in TRACKING_JSON_HINTS["status"]:
+            if key in data and data.get(key):
+                status_value = _normalize_text(data.get(key))
+                break
+        from_city, to_city = _extract_from_to(data)
+        current_city = _normalize_city_value(data.get("city") or data.get("location"))
+        if not current_city:
+            current_city = events[-1].get("city")
+        current_status = status_value or events[-1].get("title")
+        if not (current_status or current_city):
+            continue
+        order_number = None
+        for key in TRACKING_JSON_HINTS["number"]:
+            if key in data and data.get(key):
+                order_number = _normalize_text(data.get(key))
+                break
+        return {
+            "track_number": track_number,
+            "order_number": order_number or track_number,
+            "status": current_status,
+            "current_city": current_city,
+            "from_city": from_city,
+            "to_city": to_city,
+            "events": events,
+        }
+    return None
 
 
 def _extract_first_text(target, selectors):
@@ -514,12 +553,6 @@ def _parse_route(route_text):
     return "", ""
 
 
-def _is_uuid(value):
-    if not value:
-        return False
-    return bool(re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", value))
-
-
 def _get_cached_tracking(track_number):
     cached = _CDEK_TRACKING_CACHE.get(track_number)
     if not cached:
@@ -559,8 +592,14 @@ def _parse_tracking_page(page, track_number):
         raise TrackingError("ORDER_NOT_FOUND")
     if "captcha" in lowered_body or "капча" in lowered_body:
         raise TrackingError("CAPTCHA_REQUIRED")
-    if "доступ временно ограничен" in lowered_body or "access denied" in lowered_body:
+    if (
+        "доступ временно ограничен" in lowered_body
+        or "access denied" in lowered_body
+        or "temporarily unavailable" in lowered_body
+    ):
         raise TrackingError("PAGE_BLOCKED")
+    if "слишком много запросов" in lowered_body or "too many requests" in lowered_body:
+        raise TrackingError("RATE_LIMIT")
 
     order_number_text = _extract_first_text(page, CDEK_TRACKING_SELECTORS["order_number"])
     route_text = _extract_first_text(page, CDEK_TRACKING_SELECTORS["route"])
@@ -581,7 +620,7 @@ def _parse_tracking_page(page, track_number):
             timeline_items = locator
             break
     if not timeline_items:
-        raise TrackingError("PAGE_PARSE_ERROR", "Timeline not found")
+        raise TrackingError("PAGE_LAYOUT_CHANGED", "Timeline not found")
 
     events = []
     active_indices = []
@@ -607,7 +646,7 @@ def _parse_tracking_page(page, track_number):
         )
 
     if not events:
-        raise TrackingError("PAGE_PARSE_ERROR", "Timeline empty")
+        raise TrackingError("PAGE_LAYOUT_CHANGED", "Timeline empty")
 
     active_index = active_indices[-1] if active_indices else len(events) - 1
     active_event = events[active_index]
@@ -658,10 +697,34 @@ def cdek_public_track(track_number):
                 viewport={"width": 1280, "height": 720},
             )
             page = context.new_page()
+            tracking_payloads = []
+
+            def handle_response(response):
+                try:
+                    if response.request.resource_type not in {"xhr", "fetch"}:
+                        return
+                    headers = {key.lower(): value for key, value in response.headers.items()}
+                    content_type = headers.get("content-type", "")
+                    if "application/json" not in content_type and "json" not in content_type:
+                        if "order-history" not in response.url and "trace" not in response.url:
+                            return
+                    payload = response.json()
+                except Exception:
+                    return
+                if isinstance(payload, (dict, list)):
+                    tracking_payloads.append(payload)
+
+            page.on("response", handle_response)
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=15000)
-                page.wait_for_timeout(1500)
-                data = _parse_tracking_page(page, cleaned)
+                page.goto(url, wait_until="networkidle", timeout=20000)
+                page.wait_for_timeout(1600)
+                data = None
+                for payload in tracking_payloads:
+                    data = _parse_tracking_payload(payload, cleaned)
+                    if data:
+                        break
+                if not data:
+                    data = _parse_tracking_page(page, cleaned)
             finally:
                 context.close()
                 browser.close()
@@ -681,10 +744,6 @@ def cdek_public_track(track_number):
 
 
 def resolve_shipment_status(track_number, cdek_uuid):
-    if cdek_uuid and _is_uuid(cdek_uuid) and CDEK_CLIENT_ID and CDEK_CLIENT_SECRET:
-        status_data, error = cdek_get_status(cdek_uuid)
-        if not error and status_data:
-            return status_data, None
     try:
         tracking = cdek_public_track(track_number)
     except TrackingError as exc:
@@ -966,6 +1025,8 @@ def track_public_shipment():
             "PAGE_BLOCKED": 409,
             "TIMEOUT": 504,
             "INVALID_TRACK_NUMBER": 400,
+            "PAGE_LAYOUT_CHANGED": 502,
+            "PAGE_LOAD_FAILED": 502,
         }
         return jsonify({"error": exc.code}), status_map.get(exc.code, 502)
     return jsonify(data)
