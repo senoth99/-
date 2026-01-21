@@ -7,7 +7,11 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body class="crm-body" data-role="{{ role }}">
+  <body
+    class="crm-body"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
     <div class="crm-background" aria-hidden="true">
       <span class="crm-orb orb-1"></span>
       <span class="crm-orb orb-2"></span>

@@ -654,7 +654,7 @@ function registerEvents() {
     qs("shipment-save").addEventListener("click", handleAddShipment);
     qs("upload-submit").addEventListener("click", submitUpload);
   }
-  qs("logout-btn").addEventListener("click", async () => {
+  qs("logout-btn")?.addEventListener("click", async () => {
     await api("/api/logout", { method: "POST" });
     window.location.href = "/login";
   });

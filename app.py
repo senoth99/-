@@ -431,7 +431,12 @@ def index():
     if not session.get("authed"):
         return redirect("/login")
     role = get_role()
-    return render_template("index.html", role=role, role_label=get_role_label(role))
+    return render_template(
+        "index.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+    )
 
 
 @app.route("/login")
