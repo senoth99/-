@@ -41,6 +41,11 @@ ACCESS_PAGES = [
     {"key": "knowledge", "label": "База знаний", "path": "/operations/knowledge"},
     {"key": "locations", "label": "Точки продаж", "path": "/locations"},
     {"key": "bloggers", "label": "Работа с блогерами", "path": "/bloggers"},
+    {
+        "key": "bloggers_settings",
+        "label": "Настройки блогеров",
+        "path": "/bloggers/settings",
+    },
 ]
 ACCESS_PAGE_KEYS = {page["key"] for page in ACCESS_PAGES}
 ACCESS_PATHS = {page["path"]: page["key"] for page in ACCESS_PAGES}
@@ -354,6 +359,12 @@ def get_profile_name():
     return session.get("employee_name") or "Сотрудник"
 
 
+def get_profile_login():
+    if get_role() == ROLE_ADMIN:
+        return ADMIN_LOGIN
+    return session.get("employee_login") or "employee"
+
+
 def require_admin():
     if get_role() != ROLE_ADMIN:
         return jsonify({"error": "forbidden"}), 403
@@ -596,12 +607,35 @@ def bloggers():
     if guard:
         return guard
     role = get_role()
+    access_map = get_current_access()
     return render_template(
         "bloggers.html",
         authed=True,
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
+        profile_login=get_profile_login(),
+        access_map=access_map,
+    )
+
+
+@app.route("/bloggers/integrations")
+def bloggers_integrations():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("bloggers")
+    if guard:
+        return guard
+    role = get_role()
+    access_map = get_current_access()
+    return render_template(
+        "bloggers_integrations.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+        profile_login=get_profile_login(),
+        access_map=access_map,
     )
 
 
@@ -695,13 +729,14 @@ def login():
             session["role"] = ROLE_ADMIN
             session["employee_id"] = None
             session["employee_name"] = None
+            session["employee_login"] = ADMIN_LOGIN
             session["last_auth_at"] = datetime.utcnow().isoformat()
             return jsonify({"ok": True, "role": ROLE_ADMIN})
         return jsonify({"ok": False, "error": "Неверный пароль"}), 401
 
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, name, password_hash FROM employees WHERE login = ?",
+            "SELECT id, login, name, password_hash FROM employees WHERE login = ?",
             (login_name,),
         ).fetchone()
     if not row or not verify_password(password, row["password_hash"]):
@@ -710,6 +745,7 @@ def login():
     session["role"] = ROLE_EMPLOYEE
     session["employee_id"] = row["id"]
     session["employee_name"] = row["name"]
+    session["employee_login"] = row["login"]
     session["last_auth_at"] = datetime.utcnow().isoformat()
     return jsonify({"ok": True, "role": ROLE_EMPLOYEE, "employee": row["name"]})
 

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — Интеграции</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body bloggers-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+    data-profile-login="{{ profile_login }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/bloggers">Назад</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="bloggers-hero">
+          <span class="hero-badge">Интеграции</span>
+          <h2>Ведите карточки интеграций и быстро дополняйте данные.</h2>
+          <p>
+            Здесь собраны новые интеграции, статус UGC и все условия сотрудничества.
+            Управляйте списком и выгружайте таблицу для отчётов.
+          </p>
+        </section>
+
+        <section class="bloggers-section" id="integrations-actions">
+          <div class="section-head">
+            <div>
+              <h3>Добавить интеграцию</h3>
+              <p class="subtitle">Создайте новую карточку интеграции в пару кликов.</p>
+            </div>
+            <div class="section-actions">
+              <button class="primary" id="open-integration-modal">Добавить интеграцию</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="bloggers-section" id="integrations-list">
+          <div class="section-head">
+            <div>
+              <h3>Список интеграций</h3>
+              <p class="subtitle">
+                Фильтрация по любым полям: блогер, формат, бюджет, изделие и статус.
+              </p>
+            </div>
+            <div class="section-actions">
+              {% if access_map.bloggers_settings %}
+                <button class="secondary" id="export-integrations">Выгрузить таблицу</button>
+              {% else %}
+                <button class="ghost disabled" id="export-integrations" disabled>
+                  Выгрузить таблицу
+                </button>
+              {% endif %}
+            </div>
+          </div>
+          <div class="filter-bar">
+            <input
+              type="text"
+              id="integration-search"
+              placeholder="Поиск по блогеру, формату, изделию, тегам..."
+            />
+            <select id="integration-format-filter">
+              <option value="all">Все форматы</option>
+              <option value="Инст-фотопост">Инст-фотопост</option>
+              <option value="Рилс">Рилс</option>
+              <option value="ТГ">ТГ</option>
+              <option value="UGC">UGC</option>
+              <option value="Тикток">Тикток</option>
+              <option value="Твич">Твич</option>
+            </select>
+            <select id="integration-status-filter">
+              <option value="all">UGC: все</option>
+              <option value="Сдан">Сдан</option>
+              <option value="Не сдан">Не сдан</option>
+            </select>
+          </div>
+          <div class="list-grid" id="integration-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal hidden" id="integration-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3 id="integration-modal-title">Добавление интеграции</h3>
+            <p class="modal-subtitle">
+              Обязательные поля отмечены красной звёздочкой.
+            </p>
+          </div>
+          <button class="icon-btn" data-close-modal="integration-modal">✕</button>
+        </div>
+        <div class="form-grid">
+          <label class="full">
+            Выбор блогера<span class="required">*</span>
+            <input
+              type="text"
+              id="integration-blogger"
+              placeholder="Выберите блогера из базы"
+              readonly
+            />
+          </label>
+          <div class="picker-panel full" id="blogger-picker">
+            <div class="picker-header">
+              <input
+                type="text"
+                id="blogger-picker-search"
+                placeholder="Поиск по имени, ссылке или тегу"
+              />
+              <button class="secondary" id="open-blogger-from-picker">Добавить блогера</button>
+            </div>
+            <div class="picker-list" id="blogger-picker-list"></div>
+          </div>
+          <label>
+            Агент
+            <input type="text" id="integration-agent" readonly />
+          </label>
+          <label>
+            Дата интеграции
+            <input type="date" id="integration-date" />
+          </label>
+          <label>
+            Условия сотрудничества
+            <select id="integration-terms">
+              <option value="Бартер">Бартер</option>
+              <option value="КМ">КМ</option>
+            </select>
+          </label>
+          <label>
+            Формат интеграции
+            <select id="integration-format"></select>
+          </label>
+          <label>
+            Бюджет
+            <input type="text" id="integration-budget" placeholder="Например, 25 000" />
+          </label>
+          <label>
+            UGC сдан/не сдан
+            <select id="integration-ugc">
+              <option value="Сдан">Сдан</option>
+              <option value="Не сдан">Не сдан</option>
+            </select>
+          </label>
+          <label>
+            Изделие
+            <select id="integration-product"></select>
+          </label>
+          <label>
+            Размер
+            <select id="integration-size"></select>
+          </label>
+          <label>
+            Цвет
+            <select id="integration-color"></select>
+          </label>
+          <label>
+            Доп. изделие
+            <select id="integration-extra-product"></select>
+          </label>
+          <label>
+            Размер (доп.)
+            <select id="integration-extra-size"></select>
+          </label>
+          <label>
+            Цвет (доп.)
+            <select id="integration-extra-color"></select>
+          </label>
+          <label class="full">
+            Комментарий
+            <input
+              type="text"
+              id="integration-comment"
+              placeholder="Любые дополнительные детали"
+            />
+          </label>
+          <label class="full">
+            Трек номер
+            <div class="inline-actions">
+              <input type="text" id="integration-track" placeholder="Например, 102104" />
+              <button class="ghost disabled" type="button" disabled>+</button>
+            </div>
+          </label>
+          <label class="full">
+            Контакты
+            <input type="text" id="integration-contacts" placeholder="Контакты блогера" />
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="integration-modal">Отмена</button>
+          <button class="primary" id="save-integration">Сохранить интеграцию</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="integration-detail-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3 id="integration-detail-title">Интеграция</h3>
+            <p class="modal-subtitle">Карточка интеграции с возможностью редактирования.</p>
+          </div>
+          <button class="icon-btn" data-close-modal="integration-detail-modal">✕</button>
+        </div>
+        <div class="form-grid" id="integration-detail-fields"></div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="integration-detail-modal">Закрыть</button>
+          <button class="primary" id="save-integration-detail">Сохранить изменения</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="blogger-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3>Добавить блогера</h3>
+            <p class="modal-subtitle">Новый блогер сразу появится в базе.</p>
+          </div>
+          <button class="icon-btn" data-close-modal="blogger-modal">✕</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            ФИО
+            <input type="text" id="blogger-name" placeholder="Мария Иванова" />
+          </label>
+          <label>
+            Ссылка на инстаграм
+            <input type="text" id="blogger-instagram" placeholder="instagram.com/" />
+          </label>
+          <label>
+            Ссылка на телеграм
+            <input type="text" id="blogger-telegram" placeholder="t.me/" />
+          </label>
+          <label>
+            Ссылка на тикток
+            <input type="text" id="blogger-tiktok" placeholder="tiktok.com/@" />
+          </label>
+          <label>
+            Ниша
+            <select id="blogger-niche"></select>
+          </label>
+          <label>
+            Категория
+            <select id="blogger-category">
+              <option value="Микро">Микро</option>
+              <option value="Мидл">Мидл</option>
+              <option value="Крупный">Крупный</option>
+            </select>
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="blogger-modal">Отмена</button>
+          <button class="primary" id="save-blogger">Сохранить блогера</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/bloggers.js"></script>
+  </body>
+</html>
