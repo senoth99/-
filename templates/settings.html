@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body
-    class="crm-body"
+    class="crm-body settings-page"
     data-authed="{{ 'true' if authed else 'false' }}"
     data-role="{{ role }}"
     data-access-pages='{{ access_pages | tojson }}'
@@ -20,10 +20,6 @@
     </div>
     <div class="home-shell">
       <header class="home-header">
-        <div class="brand">
-          <h1>CASHER CRM</h1>
-          <p>Настройка CRM</p>
-        </div>
         <div class="topbar-actions">
           <a class="ghost menu-link" href="/">В меню</a>
         </div>
