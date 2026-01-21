@@ -56,8 +56,34 @@ function init() {
   togglePanels(isAuthed);
   const loginBtn = qs("login-submit");
   const logoutBtn = qs("logout-btn");
+  const profileTrigger = qs("profile-trigger");
+  const profileDropdown = qs("profile-dropdown");
   loginBtn?.addEventListener("click", handleLogin);
   logoutBtn?.addEventListener("click", handleLogout);
+
+  if (profileTrigger && profileDropdown) {
+    profileTrigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      profileDropdown.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", (event) => {
+      if (
+        profileDropdown.classList.contains("hidden") ||
+        profileTrigger.contains(event.target) ||
+        profileDropdown.contains(event.target)
+      ) {
+        return;
+      }
+      profileDropdown.classList.add("hidden");
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        profileDropdown.classList.add("hidden");
+      }
+    });
+  }
 }
 
 init();
