@@ -552,6 +552,35 @@ const initSettingsInteractions = () => {
   });
 };
 
+const initBloggersTabs = () => {
+  const tabs = qsa("[data-bloggers-tab]");
+  const panels = qsa("[data-bloggers-section]");
+  if (!tabs.length || !panels.length) return;
+
+  const setActiveTab = (target) => {
+    panels.forEach((panel) => {
+      const isActive = panel.dataset.bloggersSection === target;
+      panel.classList.toggle("hidden", !isActive);
+    });
+
+    tabs.forEach((tab) => {
+      const isActive = tab.dataset.bloggersTab === target;
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-pressed", isActive);
+      const cta = tab.querySelector("[data-tab-cta]");
+      if (cta) {
+        cta.textContent = isActive ? "Открыто" : "Открыть →";
+      }
+    });
+  };
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => setActiveTab(tab.dataset.bloggersTab));
+  });
+
+  setActiveTab(tabs[0].dataset.bloggersTab);
+};
+
 const initBasePage = () => {
   if (!qs("#blogger-base")) return;
   renderSettings();
@@ -650,6 +679,7 @@ const initModals = () => {
 const init = () => {
   updateFormPools();
   initSettingsInteractions();
+  initBloggersTabs();
   initBasePage();
   initIntegrationsPage();
   initModals();
