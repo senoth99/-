@@ -446,7 +446,7 @@ body[data-role="employee"] .admin-only {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .modal-close-row {
@@ -458,7 +458,7 @@ body[data-role="employee"] .admin-only {
 .modal-card.wide .modal-header {
   position: sticky;
   top: 0;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.95);
   z-index: 1;
   padding: 8px 0;
 }
@@ -1867,7 +1867,7 @@ td {
 }
 
 .theme-dark .ghost {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(148, 163, 184, 0.2);
   color: #e2e8f0;
 }
 
@@ -1914,6 +1914,50 @@ td {
 .theme-dark .profile-dropdown {
   background: rgba(15, 23, 42, 0.95);
   border-color: rgba(148, 163, 184, 0.2);
+}
+
+.theme-dark .icon-btn {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
+.theme-dark .profile-chip {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.3);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.5);
+}
+
+.theme-dark .menu-icon {
+  background: rgba(129, 140, 248, 0.18);
+  color: #c7d2fe;
+}
+
+.theme-dark .menu-cta {
+  color: #c7d2fe;
+}
+
+.theme-dark .menu-slim-subtitle {
+  color: #94a3b8;
+}
+
+.theme-dark .hero-badge,
+.theme-dark .login-badge {
+  background: rgba(129, 140, 248, 0.18);
+  color: #c7d2fe;
+}
+
+.theme-dark .card-actions .light {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
+.theme-dark.login-body {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+.theme-dark .login-card label {
+  color: #e2e8f0;
 }
 
 .theme-dark .profile-dropdown .profile-action {
