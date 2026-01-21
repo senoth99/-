@@ -772,6 +772,27 @@ td {
   overflow: hidden;
 }
 
+.menu-card--disabled {
+  background: #e5e7eb;
+  color: #6b7280;
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.menu-card--disabled .menu-icon {
+  background: #d1d5db;
+  color: #6b7280;
+}
+
+.menu-card--disabled .menu-cta {
+  color: #6b7280;
+}
+
+.menu-card--disabled::after {
+  display: none;
+}
+
 .menu-card::after {
   content: "";
   position: absolute;
@@ -1077,5 +1098,129 @@ td {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+  }
+
+  .crm-orb {
+    width: 220px;
+    height: 220px;
+    filter: blur(8px);
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+
+  .crm-background,
+  .login-background {
+    display: none;
+  }
+
+  .home-shell,
+  .page-shell,
+  .main,
+  .login-shell {
+    padding: 16px;
+  }
+
+  .sidebar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sidebar .menu-link,
+  .sidebar button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .topbar,
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .profile-menu,
+  .profile-trigger,
+  .profile-chip {
+    width: 100%;
+  }
+
+  .menu-grid,
+  .grid,
+  .placeholder-grid,
+  .detail-grid,
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions,
+  .shipment-detail-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cdek-button {
+    justify-content: center;
+  }
+
+  .modal-card,
+  .modal-card.wide,
+  .login-card,
+  .panel-card,
+  .hero-card,
+  .menu-card,
+  .placeholder-card,
+  .card {
+    border-radius: 16px;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px;
+  }
+
+  .table-wrapper {
+    max-height: none;
+  }
+
+  th,
+  td {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .role-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h2 {
+    font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .crm-orb,
+  .orb {
+    animation: none !important;
   }
 }
