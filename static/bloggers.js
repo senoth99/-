@@ -88,6 +88,40 @@ const state = {
 let selectedBloggerId = null;
 let activeIntegrationId = null;
 
+const toastDurationMs = 10000;
+const toastLimit = 3;
+
+const showNotification = (message, type = "info") => {
+  if (!message) return;
+  const container = qs("#toast-container");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <div class="toast-message">${message}</div>
+    <button class="toast-close" type="button" aria-label="Скрыть уведомление">×</button>
+  `;
+  const removeToast = () => {
+    toast.classList.add("toast-hide");
+    toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+  };
+  const timer = setTimeout(removeToast, toastDurationMs);
+  toast.querySelector(".toast-close").addEventListener("click", () => {
+    clearTimeout(timer);
+    removeToast();
+  });
+  container.appendChild(toast);
+  const toasts = Array.from(container.querySelectorAll(".toast"));
+  if (toasts.length > toastLimit) {
+    toasts.slice(0, toasts.length - toastLimit).forEach((oldToast) => {
+      oldToast.classList.add("toast-hide");
+      oldToast.addEventListener("transitionend", () => oldToast.remove(), {
+        once: true,
+      });
+    });
+  }
+};
+
 const normalizeText = (value) =>
   (value || "")
     .toString()
@@ -411,6 +445,7 @@ const addBlogger = () => {
     selectedBloggerId = blogger.id;
     qs("#integration-blogger").value = blogger.name;
   }
+  showNotification("Блогер добавлен в базу.", "success");
 };
 
 const openIntegrationModal = () => {
@@ -452,6 +487,7 @@ const saveIntegration = () => {
   state.integrations.unshift(integration);
   closeModal("integration-modal");
   renderIntegrationList();
+  showNotification("Интеграция сохранена.", "success");
 };
 
 const openIntegrationDetail = (integrationId) => {
@@ -514,6 +550,7 @@ const saveIntegrationDetail = () => {
     qs("#integration-detail-contacts")?.value.trim() || integration.contacts;
   closeModal("integration-detail-modal");
   renderIntegrationList();
+  showNotification("Изменения по интеграции сохранены.", "success");
 };
 
 const initSettingsInteractions = () => {
@@ -536,6 +573,7 @@ const initSettingsInteractions = () => {
       updateFormPools();
       renderBloggerList();
       renderBloggerPicker();
+      showNotification("Новое значение добавлено в настройки.", "success");
     }
     const removeButton = event.target.closest("[data-remove-tag]");
     if (removeButton) {
@@ -548,7 +586,41 @@ const initSettingsInteractions = () => {
       updateFormPools();
       renderBloggerList();
       renderBloggerPicker();
+      showNotification("Значение удалено из настроек.", "info");
     }
+  });
+};
+
+const applyViewMode = (container, mode) => {
+  if (!container) return;
+  container.classList.toggle("is-list", mode === "list");
+  container.classList.toggle("is-grid", mode === "grid");
+};
+
+const initViewToggles = () => {
+  const toggles = qsa("[data-view-toggle]");
+  if (!toggles.length) return;
+  toggles.forEach((toggle) => {
+    const targetSelector = toggle.dataset.viewToggle;
+    const container = qs(targetSelector);
+    if (!container) return;
+    const buttons = Array.from(toggle.querySelectorAll("[data-view]"));
+    const defaultView = toggle.dataset.defaultView || "list";
+    applyViewMode(container, defaultView);
+    buttons.forEach((button) => {
+      const isActive = button.dataset.view === defaultView;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive);
+      button.addEventListener("click", () => {
+        const view = button.dataset.view;
+        applyViewMode(container, view);
+        buttons.forEach((btn) => {
+          const active = btn === button;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-pressed", active);
+        });
+      });
+    });
   });
 };
 
@@ -613,6 +685,12 @@ const initBasePage = () => {
   });
 };
 
+const initSettingsPage = () => {
+  if (!qs("#blogger-settings")) return;
+  renderSettings();
+  updateFormPools();
+};
+
 const initIntegrationsPage = () => {
   if (!qs("#integrations-actions")) return;
   updateFormPools();
@@ -663,7 +741,7 @@ const initIntegrationsPage = () => {
 
   qs("#export-integrations")?.addEventListener("click", () => {
     if (qs("#export-integrations")?.disabled) return;
-    alert("Выгрузка таблицы будет доступна в следующем обновлении.");
+    showNotification("Выгрузка таблицы будет доступна в следующем обновлении.", "info");
   });
 };
 
@@ -681,8 +759,10 @@ const init = () => {
   initSettingsInteractions();
   initBloggersTabs();
   initBasePage();
+  initSettingsPage();
   initIntegrationsPage();
   initModals();
+  initViewToggles();
 };
 
 init();

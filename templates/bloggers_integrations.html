@@ -56,6 +56,29 @@
               </p>
             </div>
             <div class="section-actions">
+              <div
+                class="view-toggle"
+                data-view-toggle="#integration-list"
+                data-default-view="list"
+                aria-label="Переключатель вида"
+              >
+                <button
+                  class="ghost small is-active"
+                  type="button"
+                  data-view="list"
+                  aria-pressed="true"
+                >
+                  Список
+                </button>
+                <button
+                  class="ghost small"
+                  type="button"
+                  data-view="grid"
+                  aria-pressed="false"
+                >
+                  Ячейки
+                </button>
+              </div>
               {% if access_map.bloggers_settings %}
                 <button class="secondary" id="export-integrations">Выгрузить таблицу</button>
               {% else %}
@@ -86,7 +109,7 @@
               <option value="Не сдан">Не сдан</option>
             </select>
           </div>
-          <div class="list-grid" id="integration-list"></div>
+          <div class="list-grid is-list" id="integration-list"></div>
         </section>
       </main>
     </div>
@@ -266,6 +289,8 @@
         </div>
       </div>
     </div>
+
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
     <script src="/static/bloggers.js"></script>
   </body>
