@@ -45,6 +45,29 @@
               </p>
             </div>
             <div class="section-actions">
+              <div
+                class="view-toggle"
+                data-view-toggle="#blogger-list"
+                data-default-view="list"
+                aria-label="Переключатель вида"
+              >
+                <button
+                  class="ghost small is-active"
+                  type="button"
+                  data-view="list"
+                  aria-pressed="true"
+                >
+                  Список
+                </button>
+                <button
+                  class="ghost small"
+                  type="button"
+                  data-view="grid"
+                  aria-pressed="false"
+                >
+                  Ячейки
+                </button>
+              </div>
               <button class="secondary" id="open-add-blogger">Добавить блогера</button>
             </div>
           </div>
@@ -64,7 +87,7 @@
               <option value="all">Все ниши</option>
             </select>
           </div>
-          <div class="list-grid" id="blogger-list"></div>
+          <div class="list-grid is-list" id="blogger-list"></div>
         </section>
       </main>
     </div>
@@ -134,6 +157,8 @@
         </div>
       </div>
     </div>
+
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
     <script src="/static/bloggers.js"></script>
   </body>
