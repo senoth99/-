@@ -275,6 +275,24 @@ def _get_cdek_token(force_refresh=False):
 
 def _parse_cdek_status(entity, track_number):
     statuses = entity.get("statuses") or []
+    order = {
+        "uuid": entity.get("uuid"),
+        "cdek_number": entity.get("cdek_number") or track_number,
+        "number": entity.get("number"),
+        "sender": entity.get("sender"),
+        "recipient": entity.get("recipient"),
+        "from_location": entity.get("from_location") or entity.get("sender_location"),
+        "to_location": entity.get("to_location") or entity.get("delivery_location"),
+        "delivery_detail": entity.get("delivery_detail") or {},
+        "delivery_mode": entity.get("delivery_mode"),
+        "tariff_code": entity.get("tariff_code"),
+        "tariff_name": entity.get("tariff_name"),
+        "delivery_sum": entity.get("delivery_sum"),
+        "total_sum": entity.get("total_sum"),
+        "comment": entity.get("comment"),
+        "planned_delivery_date": entity.get("planned_delivery_date")
+        or entity.get("delivery_date"),
+    }
     if not statuses:
         return {
             "track_number": entity.get("cdek_number") or track_number,
@@ -285,6 +303,7 @@ def _parse_cdek_status(entity, track_number):
                 "city": None,
             },
             "statuses": [],
+            "order": order,
         }
     latest = max(
         statuses,
@@ -299,6 +318,7 @@ def _parse_cdek_status(entity, track_number):
             "city": latest.get("city"),
         },
         "statuses": statuses,
+        "order": order,
     }
 
 

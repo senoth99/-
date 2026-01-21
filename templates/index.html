@@ -137,6 +137,74 @@
       </div>
     </div>
 
+    <div class="modal hidden" id="shipment-details-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h2 id="shipment-detail-title">Поставка</h2>
+            <div class="subtitle" id="shipment-detail-route"></div>
+          </div>
+          <button class="icon-btn" data-close="shipment-details-modal">×</button>
+        </div>
+        <div class="shipment-detail-actions">
+          <button
+            class="icon-btn success"
+            id="shipment-detail-refresh"
+            data-refresh=""
+            aria-label="Обновить"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20 12a8 8 0 1 1-2.34-5.66"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+              <path
+                d="M20 6v6h-6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            class="icon-btn danger"
+            id="shipment-detail-delete"
+            data-delete=""
+            aria-label="Удалить"
+          >
+            ×
+          </button>
+          <a
+            class="cdek-button"
+            id="shipment-cdek-link"
+            href="https://www.cdek.ru/ru/tracking"
+            target="_blank"
+            rel="noopener"
+          >
+            <span class="cdek-logo">CDEK</span>
+            Открыть в СДЭК
+          </a>
+        </div>
+        <div class="detail-section">
+          <h3>Основная информация</h3>
+          <div class="detail-grid" id="shipment-detail-main"></div>
+        </div>
+        <div class="detail-section">
+          <h3>Дополнительная информация</h3>
+          <div class="detail-grid" id="shipment-detail-extra"></div>
+        </div>
+        <div class="detail-section">
+          <h3>История статусов</h3>
+          <div class="status-list" id="shipment-detail-statuses"></div>
+        </div>
+      </div>
+    </div>
+
     <script src="/static/app.js"></script>
   </body>
 </html>

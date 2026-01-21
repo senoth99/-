@@ -2,6 +2,7 @@ const state = {
   locations: [],
   shipments: [],
   currentLocationId: null,
+  currentShipmentId: null,
 };
 
 const modal = (id) => document.getElementById(id);
@@ -19,6 +20,62 @@ const formatDate = (value) => {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ru-RU");
+};
+
+const formatCurrency = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  if (Number.isNaN(number)) return String(value);
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0,
+  }).format(number);
+};
+
+const formatPhones = (value) => {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ");
+  }
+  return String(value);
+};
+
+const formatPerson = (person) => {
+  if (!person) return null;
+  const parts = [person.name, person.company, person.phone]
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+};
+
+const resolveDeliveryMethod = (order) => {
+  if (!order) return null;
+  const detail = order.delivery_detail || {};
+  const mode = (order.delivery_mode || "").toLowerCase();
+  if (detail.delivery_point || /pvz|pickup|office|point/.test(mode)) {
+    return "В ПВЗ";
+  }
+  if (detail.address || /door|courier/.test(mode)) {
+    return "Курьером";
+  }
+  return null;
+};
+
+const resolveAddress = (location, detail) => {
+  const detailAddress =
+    detail?.address?.address ||
+    detail?.address?.full_address ||
+    detail?.address_full ||
+    detail?.address_string ||
+    detail?.address;
+  if (typeof detailAddress === "string" && detailAddress.trim()) {
+    return detailAddress.trim();
+  }
+  const locationAddress =
+    location?.address || location?.address_full || location?.address_string;
+  const parts = [location?.city, locationAddress].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
 };
 
 const statusIconMap = {
@@ -164,6 +221,7 @@ function renderShipments() {
   state.shipments.forEach((shipment) => {
     const card = document.createElement("div");
     card.className = "card shipment-card";
+    card.dataset.shipment = shipment.id;
     card.innerHTML = `
       <div class="shipment-header">
         <div>
@@ -200,6 +258,177 @@ function renderShipments() {
     `;
     grid.appendChild(card);
   });
+}
+
+function renderDetailItems(container, items) {
+  container.innerHTML = "";
+  const filtered = items.filter(
+    (item) => item.value !== null && item.value !== undefined && item.value !== "",
+  );
+  if (!filtered.length) {
+    container.innerHTML =
+      "<div class='detail-item'><span class='detail-label'>Нет данных</span></div>";
+    return;
+  }
+  filtered.forEach((item) => {
+    const block = document.createElement("div");
+    block.className = "detail-item";
+    block.innerHTML = `
+      <span class="detail-label">${item.label}</span>
+      <span class="detail-value">${item.value}</span>
+    `;
+    container.appendChild(block);
+  });
+}
+
+function renderStatusHistory(container, statuses) {
+  container.innerHTML = "";
+  if (!statuses?.length) {
+    container.innerHTML = "<div class='status-item'>Нет данных по статусам.</div>";
+    return;
+  }
+  statuses.forEach((status) => {
+    const item = document.createElement("div");
+    item.className = "status-item";
+    item.innerHTML = `
+      <strong>${status.name || status.code || "Статус"}</strong>
+      <span class="meta">${status.city || "Локация неизвестна"}</span>
+      <span class="meta">${formatDate(status.date_time)}</span>
+    `;
+    container.appendChild(item);
+  });
+}
+
+async function openShipmentDetails(shipmentId) {
+  const shipment = state.shipments.find((item) => item.id === shipmentId);
+  if (!shipment) return;
+  state.currentShipmentId = shipmentId;
+  const title = qs("shipment-detail-title");
+  const route = qs("shipment-detail-route");
+  const refreshBtn = qs("shipment-detail-refresh");
+  const deleteBtn = qs("shipment-detail-delete");
+  const cdekLink = qs("shipment-cdek-link");
+  const mainContainer = qs("shipment-detail-main");
+  const extraContainer = qs("shipment-detail-extra");
+  const statusesContainer = qs("shipment-detail-statuses");
+  const trackNumber = shipment.display_number || shipment.internal_number || "";
+
+  title.textContent = `Поставка ${trackNumber || shipment.id}`;
+  route.textContent = `${shipment.origin_label} → ${shipment.destination_label}`;
+  refreshBtn.dataset.refresh = shipment.id;
+  deleteBtn.dataset.delete = shipment.id;
+  cdekLink.href = trackNumber
+    ? `https://www.cdek.ru/ru/tracking?order_id=${encodeURIComponent(trackNumber)}`
+    : "https://www.cdek.ru/ru/tracking";
+
+  mainContainer.innerHTML =
+    "<div class='detail-item'><span class='detail-label'>Загрузка...</span></div>";
+  extraContainer.innerHTML =
+    "<div class='detail-item'><span class='detail-label'>Загрузка...</span></div>";
+  statusesContainer.innerHTML =
+    "<div class='status-item'>Загрузка статусов...</div>";
+  openModal("shipment-details-modal");
+
+  if (!trackNumber) {
+    renderDetailItems(mainContainer, [
+      { label: "Статус", value: shipment.last_status || "Нет данных" },
+      { label: "Последнее обновление", value: formatDate(shipment.last_update) },
+      { label: "Локация", value: shipment.last_location || "Локация неизвестна" },
+    ]);
+    renderDetailItems(extraContainer, [
+      { label: "Получатель", value: "Нет трек-номера" },
+    ]);
+    renderStatusHistory(statusesContainer, []);
+    return;
+  }
+
+  try {
+    const tracking = await api("/api/track", {
+      method: "POST",
+      body: JSON.stringify({ track_number: trackNumber }),
+    });
+    const order = tracking.order || {};
+    const recipient = order.recipient || {};
+    const sender = order.sender || {};
+    const deliveryDetail = order.delivery_detail || {};
+    const fromLocation = order.from_location || {};
+    const toLocation = order.to_location || {};
+    const deliveryMethod = resolveDeliveryMethod(order);
+    const deliveryPoint = deliveryDetail.delivery_point || deliveryDetail.point;
+
+    renderDetailItems(mainContainer, [
+      {
+        label: "Статус",
+        value:
+          tracking.status?.name ||
+          tracking.status?.code ||
+          shipment.last_status ||
+          "Нет данных",
+      },
+      {
+        label: "Последнее обновление",
+        value: formatDate(tracking.status?.date_time || shipment.last_update),
+      },
+      {
+        label: "Текущая локация",
+        value:
+          tracking.status?.city || shipment.last_location || "Локация неизвестна",
+      },
+      { label: "Способ доставки", value: deliveryMethod || "Не указан" },
+      {
+        label: "Откуда",
+        value: fromLocation.city || shipment.origin_label,
+      },
+      {
+        label: "Куда",
+        value: toLocation.city || shipment.destination_label,
+      },
+      {
+        label: "Адрес отправки",
+        value: resolveAddress(fromLocation) || shipment.origin_label,
+      },
+      {
+        label: "Адрес доставки",
+        value: resolveAddress(toLocation, deliveryDetail) || shipment.destination_label,
+      },
+      {
+        label: "Пункт выдачи",
+        value: deliveryPoint ? `ПВЗ ${deliveryPoint}` : null,
+      },
+    ]);
+
+    renderDetailItems(extraContainer, [
+      { label: "Получатель", value: formatPerson(recipient) || recipient.name },
+      { label: "Телефон получателя", value: formatPhones(recipient.phone || recipient.phones) },
+      { label: "Email получателя", value: recipient.email },
+      { label: "Отправитель", value: formatPerson(sender) || sender.name },
+      { label: "Телефон отправителя", value: formatPhones(sender.phone || sender.phones) },
+      {
+        label: "Тариф",
+        value: order.tariff_name || order.tariff_code,
+      },
+      {
+        label: "Стоимость доставки",
+        value: formatCurrency(order.delivery_sum),
+      },
+      { label: "Стоимость заказа", value: formatCurrency(order.total_sum) },
+      {
+        label: "Плановая доставка",
+        value: formatDate(order.planned_delivery_date),
+      },
+      { label: "Комментарий", value: order.comment },
+    ]);
+
+    renderStatusHistory(statusesContainer, tracking.statuses);
+  } catch (err) {
+    renderDetailItems(mainContainer, [
+      { label: "Ошибка", value: err.message },
+    ]);
+    renderDetailItems(extraContainer, [
+      { label: "Получатель", value: "Нет данных" },
+    ]);
+    renderStatusHistory(statusesContainer, []);
+  }
 }
 
 async function handleLogin() {
@@ -367,6 +596,9 @@ async function refreshShipment(shipmentId) {
   try {
     await api(`/api/shipments/${shipmentId}/refresh`, { method: "POST" });
     await loadShipments();
+    if (state.currentShipmentId === shipmentId) {
+      await openShipmentDetails(shipmentId);
+    }
   } catch (err) {
     alert(err.message);
   }
@@ -376,6 +608,10 @@ async function deleteShipment(shipmentId) {
   try {
     await api(`/api/shipments/${shipmentId}`, { method: "DELETE" });
     await loadShipments();
+    if (state.currentShipmentId === shipmentId) {
+      closeModal("shipment-details-modal");
+      state.currentShipmentId = null;
+    }
   } catch (err) {
     alert(err.message);
   }
@@ -406,13 +642,19 @@ function registerEvents() {
   document.addEventListener("click", (event) => {
     const target = event.target;
     const actionTarget = target.closest(
-      "[data-close],[data-upload],[data-records],[data-refresh],[data-delete],[data-delete-location]",
+      "[data-close],[data-upload],[data-records],[data-refresh],[data-delete],[data-delete-location],[data-shipment]",
     );
     if (!actionTarget) {
       return;
     }
     if (actionTarget.dataset.close) {
       closeModal(actionTarget.dataset.close);
+      if (actionTarget.dataset.close === "shipment-details-modal") {
+        state.currentShipmentId = null;
+      }
+    }
+    if (actionTarget.dataset.shipment) {
+      openShipmentDetails(Number(actionTarget.dataset.shipment));
     }
     if (actionTarget.dataset.upload) {
       openUpload(Number(actionTarget.dataset.upload));
