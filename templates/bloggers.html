@@ -7,7 +7,16 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body data-authed="{{ 'true' if authed else 'false' }}" data-role="{{ role }}">
+  <body
+    class="crm-body"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
     <div class="page-shell">
       <header class="page-header">
         <div class="brand">
@@ -16,13 +25,6 @@
         </div>
         <div class="topbar-actions">
           <a class="ghost menu-link" href="/">В меню</a>
-          <div class="profile-chip">
-            <div class="profile-avatar">{{ "A" if role == "admin" else "S" }}</div>
-            <div class="profile-meta">
-              <span class="profile-name">Профиль</span>
-              <span class="profile-role">{{ role_label }}</span>
-            </div>
-          </div>
           <button class="ghost logout-btn" id="logout-btn">Выйти</button>
         </div>
       </header>
