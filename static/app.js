@@ -139,6 +139,40 @@ const resolveStatusIcon = (shipment) => {
   return "🚚";
 };
 
+const toastDurationMs = 10000;
+const toastLimit = 3;
+
+const showNotification = (message, type = "info") => {
+  if (!message) return;
+  const container = qs("toast-container");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <div class="toast-message">${message}</div>
+    <button class="toast-close" type="button" aria-label="Скрыть уведомление">×</button>
+  `;
+  const removeToast = () => {
+    toast.classList.add("toast-hide");
+    toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+  };
+  const timer = setTimeout(removeToast, toastDurationMs);
+  toast.querySelector(".toast-close").addEventListener("click", () => {
+    clearTimeout(timer);
+    removeToast();
+  });
+  container.appendChild(toast);
+  const toasts = Array.from(container.querySelectorAll(".toast"));
+  if (toasts.length > toastLimit) {
+    toasts.slice(0, toasts.length - toastLimit).forEach((oldToast) => {
+      oldToast.classList.add("toast-hide");
+      oldToast.addEventListener("transitionend", () => oldToast.remove(), {
+        once: true,
+      });
+    });
+  }
+};
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -461,8 +495,10 @@ async function handleAddLocation() {
     qs("location-address").value = "";
     closeModal("location-modal");
     await loadLocations();
+    showNotification("Точка продаж добавлена.", "success");
   } catch (err) {
     error.textContent = err.message;
+    showNotification(err.message, "error");
   }
 }
 
@@ -510,8 +546,10 @@ async function handleAddShipment() {
     });
     closeModal("shipment-modal");
     await loadShipments();
+    showNotification("Поставка добавлена.", "success");
   } catch (err) {
     error.textContent = err.message;
+    showNotification(err.message, "error");
   }
 }
 
@@ -543,8 +581,10 @@ async function submitUpload() {
     }
     closeModal("upload-modal");
     await loadLocations();
+    showNotification("Файл успешно импортирован.", "success");
   } catch (err) {
     error.textContent = err.message;
+    showNotification(err.message, "error");
   }
 }
 
@@ -580,7 +620,7 @@ async function openRecords(locationId) {
 async function exportExcel() {
   const response = await fetch("/api/export");
   if (!response.ok) {
-    alert("Ошибка экспорта");
+    showNotification("Ошибка экспорта.", "error");
     return;
   }
   const blob = await response.blob();
@@ -590,6 +630,7 @@ async function exportExcel() {
   link.download = "crm_export.xlsx";
   link.click();
   window.URL.revokeObjectURL(url);
+  showNotification("Экспорт Excel начался.", "info");
 }
 
 async function refreshShipment(shipmentId) {
@@ -599,8 +640,9 @@ async function refreshShipment(shipmentId) {
     if (state.currentShipmentId === shipmentId) {
       await openShipmentDetails(shipmentId);
     }
+    showNotification("Статус поставки обновлен.", "success");
   } catch (err) {
-    alert(err.message);
+    showNotification(err.message, "error");
   }
 }
 
@@ -612,8 +654,9 @@ async function deleteShipment(shipmentId) {
       closeModal("shipment-details-modal");
       state.currentShipmentId = null;
     }
+    showNotification("Поставка удалена.", "info");
   } catch (err) {
-    alert(err.message);
+    showNotification(err.message, "error");
   }
 }
 
@@ -621,8 +664,9 @@ async function deleteLocation(locationId) {
   try {
     await api(`/api/locations/${locationId}`, { method: "DELETE" });
     await loadLocations();
+    showNotification("Точка продаж удалена.", "info");
   } catch (err) {
-    alert(err.message);
+    showNotification(err.message, "error");
   }
 }
 
