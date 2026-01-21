@@ -7,6 +7,8 @@ const state = {
 
 const modal = (id) => document.getElementById(id);
 const qs = (id) => document.getElementById(id);
+const role = document.body?.dataset?.role || "employee";
+const isAdmin = role === "admin";
 
 const openModal = (id) => modal(id).classList.remove("hidden");
 const closeModal = (id) => modal(id).classList.add("hidden");
@@ -158,7 +160,7 @@ async function api(path, options = {}) {
     ...options,
   });
   if (response.status === 401) {
-    window.location.href = "/";
+    window.location.href = "/login";
     throw new Error("unauthorized");
   }
   if (!response.ok) {
@@ -193,7 +195,22 @@ function renderLocations() {
   }
   state.locations.forEach((location) => {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card animated-card";
+    const actions = isAdmin
+      ? `
+      <div class="card-actions">
+        <button class="secondary" data-upload="${location.id}">Импорт</button>
+        <button class="light" data-records="${location.id}">Детали</button>
+        <button class="light danger" data-delete-location="${location.id}">
+          Удалить
+        </button>
+      </div>
+    `
+      : `
+      <div class="card-actions">
+        <button class="secondary" data-records="${location.id}">Детали</button>
+      </div>
+    `;
     card.innerHTML = `
       <h3>${location.name}</h3>
       <div class="meta">${location.address || "Адрес не указан"}</div>
@@ -211,13 +228,7 @@ function renderLocations() {
           location.last_update,
         )}</span></div>
       </div>
-      <div class="card-actions">
-        <button class="secondary" data-upload="${location.id}">Импорт</button>
-        <button class="light" data-records="${location.id}">Детали</button>
-        <button class="light danger" data-delete-location="${location.id}">
-          Удалить
-        </button>
-      </div>
+      ${actions}
     `;
     grid.appendChild(card);
   });
@@ -233,8 +244,32 @@ function renderShipments() {
   }
   state.shipments.forEach((shipment) => {
     const card = document.createElement("div");
-    card.className = "card shipment-card";
+    card.className = "card shipment-card animated-card";
     card.dataset.shipment = shipment.id;
+    const actionButtons = isAdmin
+      ? `
+        <button class="icon-btn success" data-refresh="${shipment.id}" aria-label="Обновить">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M20 12a8 8 0 1 1-2.34-5.66"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <path
+              d="M20 6v6h-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <button class="icon-btn danger" data-delete="${shipment.id}" aria-label="Удалить">×</button>
+      `
+      : "";
     card.innerHTML = `
       <div class="shipment-header">
         <div>
@@ -242,26 +277,7 @@ function renderShipments() {
           <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
         </div>
         <div class="shipment-actions">
-          <button class="icon-btn success" data-refresh="${shipment.id}" aria-label="Обновить">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M20 12a8 8 0 1 1-2.34-5.66"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M20 6v6h-6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-          <button class="icon-btn danger" data-delete="${shipment.id}" aria-label="Удалить">×</button>
+          ${actionButtons}
         </div>
       </div>
       <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
@@ -626,15 +642,21 @@ async function deleteLocation(locationId) {
 }
 
 function registerEvents() {
-  qs("add-location-btn").addEventListener("click", () => openModal("location-modal"));
-  qs("add-shipment-btn").addEventListener("click", openShipmentModal);
+  if (isAdmin) {
+    qs("add-location-btn")?.addEventListener("click", () =>
+      openModal("location-modal"),
+    );
+    qs("add-shipment-btn")?.addEventListener("click", openShipmentModal);
+  }
   qs("export-btn").addEventListener("click", exportExcel);
-  qs("location-save").addEventListener("click", handleAddLocation);
-  qs("shipment-save").addEventListener("click", handleAddShipment);
-  qs("upload-submit").addEventListener("click", submitUpload);
+  if (isAdmin) {
+    qs("location-save").addEventListener("click", handleAddLocation);
+    qs("shipment-save").addEventListener("click", handleAddShipment);
+    qs("upload-submit").addEventListener("click", submitUpload);
+  }
   qs("logout-btn").addEventListener("click", async () => {
     await api("/api/logout", { method: "POST" });
-    window.location.href = "/";
+    window.location.href = "/login";
   });
 
   document.addEventListener("click", (event) => {
@@ -655,18 +677,22 @@ function registerEvents() {
       openShipmentDetails(Number(actionTarget.dataset.shipment));
     }
     if (actionTarget.dataset.upload) {
+      if (!isAdmin) return;
       openUpload(Number(actionTarget.dataset.upload));
     }
     if (actionTarget.dataset.records) {
       openRecords(Number(actionTarget.dataset.records));
     }
     if (actionTarget.dataset.refresh) {
+      if (!isAdmin) return;
       refreshShipment(Number(actionTarget.dataset.refresh));
     }
     if (actionTarget.dataset.delete) {
+      if (!isAdmin) return;
       deleteShipment(Number(actionTarget.dataset.delete));
     }
     if (actionTarget.dataset.deleteLocation) {
+      if (!isAdmin) return;
       deleteLocation(Number(actionTarget.dataset.deleteLocation));
     }
   });

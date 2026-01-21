@@ -14,6 +14,8 @@ async function api(path, options = {}) {
 
 async function handleLogin() {
   const password = qs("login-password")?.value.trim();
+  const role =
+    document.querySelector(".role-option.selected")?.dataset?.role || "employee";
   const error = qs("login-error");
   if (error) {
     error.textContent = "";
@@ -21,7 +23,7 @@ async function handleLogin() {
   try {
     await api("/api/login", {
       method: "POST",
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, role }),
     });
     window.location.assign("/");
   } catch (err) {
@@ -33,6 +35,15 @@ async function handleLogin() {
 
 function init() {
   const loginBtn = qs("login-submit");
+  const rolePicker = qs("role-picker");
+  rolePicker?.addEventListener("click", (event) => {
+    const target = event.target;
+    const option = target.closest(".role-option");
+    if (!option) return;
+    document.querySelectorAll(".role-option").forEach((button) => {
+      button.classList.toggle("selected", button === option);
+    });
+  });
   loginBtn?.addEventListener("click", handleLogin);
 }
 
