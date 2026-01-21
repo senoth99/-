@@ -441,6 +441,12 @@ body[data-role="employee"] .admin-only {
   justify-content: space-between;
 }
 
+.modal-close-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
+}
+
 .modal-card.wide .modal-header {
   position: sticky;
   top: 0;
@@ -477,7 +483,8 @@ label {
 
 input[type="text"],
 input[type="password"],
-input[type="file"] {
+input[type="file"],
+input[type="date"] {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #d1d5db;
@@ -1589,7 +1596,7 @@ td {
 
 .filter-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(180px, 1fr));
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(170px, 1fr));
   gap: 12px;
 }
 

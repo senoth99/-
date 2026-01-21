@@ -323,7 +323,8 @@ const renderIntegrationList = () => {
   if (!list) return;
   const query = qs("#integration-search")?.value || "";
   const format = qs("#integration-format-filter")?.value || "all";
-  const status = qs("#integration-status-filter")?.value || "all";
+  const terms = qs("#integration-terms-filter")?.value || "all";
+  const date = qs("#integration-date-filter")?.value || "";
   const filtered = state.integrations.filter((integration) => {
     const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
     const haystack = [
@@ -340,8 +341,9 @@ const renderIntegrationList = () => {
     ].join(" ");
     const matchesQuery = fuzzyMatch(haystack, query);
     const matchesFormat = format === "all" || integration.format === format;
-    const matchesStatus = status === "all" || integration.ugcStatus === status;
-    return matchesQuery && matchesFormat && matchesStatus;
+    const matchesTerms = terms === "all" || integration.terms === terms;
+    const matchesDate = !date || integration.date === date;
+    return matchesQuery && matchesFormat && matchesTerms && matchesDate;
   });
 
   list.innerHTML = filtered
@@ -723,12 +725,15 @@ const initIntegrationsPage = () => {
     renderBloggerPicker();
   });
 
-  ["#integration-search", "#integration-format-filter", "#integration-status-filter"].forEach(
-    (selector) => {
-      qs(selector)?.addEventListener("input", renderIntegrationList);
-      qs(selector)?.addEventListener("change", renderIntegrationList);
-    }
-  );
+  [
+    "#integration-search",
+    "#integration-format-filter",
+    "#integration-terms-filter",
+    "#integration-date-filter",
+  ].forEach((selector) => {
+    qs(selector)?.addEventListener("input", renderIntegrationList);
+    qs(selector)?.addEventListener("change", renderIntegrationList);
+  });
 
   qs("#integration-list")?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-integration-id]");
