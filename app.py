@@ -3,13 +3,13 @@ import logging
 import os
 import re
 import sqlite3
-import urllib.error
+import time
 import urllib.parse
-import urllib.request
-from hashlib import sha256
 from datetime import datetime, timedelta
+from hashlib import sha256
 
 import pandas as pd
+import requests
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session
 from werkzeug.utils import secure_filename
 
@@ -34,7 +34,18 @@ CDEK_API_BASE_URL = "https://api.cdek.ru/v2"
 CDEK_TOKEN_URL = f"{CDEK_API_BASE_URL}/oauth/token"
 CDEK_ORDERS_URL = f"{CDEK_API_BASE_URL}/orders"
 CDEK_TOKEN_REFRESH_BUFFER = timedelta(seconds=60)
+CDEK_CONNECT_TIMEOUT = 5
+CDEK_READ_TIMEOUT = 30
+CDEK_REQUEST_TIMEOUT = (CDEK_CONNECT_TIMEOUT, CDEK_READ_TIMEOUT)
+CDEK_REQUEST_RETRIES = 3
+CDEK_TRACK_CACHE_TTL = timedelta(minutes=2)
+FINAL_CDEK_STATUSES = {
+    "DELIVERED",
+    "DELIVERED_TO_RECIPIENT",
+    "DELIVERED_TO_CUSTOMER",
+}
 _CDEK_TOKEN_CACHE = {"token": None, "expires_at": datetime.min}
+_CDEK_TRACK_CACHE = {}
 ACCESS_PAGES = [
     {"key": "operations", "label": "Операционная работа", "path": "/operations"},
     {"key": "tasks", "label": "Трекер задач", "path": "/operations/tasks"},
@@ -395,34 +406,65 @@ def _get_cdek_credentials():
     return client_id, client_secret
 
 
+def _request_with_retry(method, url, **kwargs):
+    for attempt in range(CDEK_REQUEST_RETRIES):
+        try:
+            return requests.request(method, url, timeout=CDEK_REQUEST_TIMEOUT, **kwargs)
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as exc:
+            if attempt == CDEK_REQUEST_RETRIES - 1:
+                raise
+            time.sleep(2 ** attempt)
+
+
+def _cache_cdek_result(track_number, data):
+    _CDEK_TRACK_CACHE[track_number] = {
+        "data": data,
+        "fetched_at": datetime.utcnow(),
+    }
+
+
+def _is_final_cdek_status(status_code):
+    return (status_code or "").upper() in FINAL_CDEK_STATUSES
+
+
+def _get_cached_cdek_result(track_number):
+    cached = _CDEK_TRACK_CACHE.get(track_number)
+    if not cached:
+        return None
+    data = cached.get("data") or {}
+    fetched_at = cached.get("fetched_at", datetime.min)
+    status_code = (data.get("status") or {}).get("code")
+    if _is_final_cdek_status(status_code):
+        return data
+    if datetime.utcnow() - fetched_at < CDEK_TRACK_CACHE_TTL:
+        return data
+    return None
+
+
 def _request_cdek_token():
     client_id, client_secret = _get_cdek_credentials()
-    payload = urllib.parse.urlencode(
-        {
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }
-    ).encode("utf-8")
-    request_obj = urllib.request.Request(
-        CDEK_TOKEN_URL,
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
     try:
-        with urllib.request.urlopen(request_obj, timeout=20) as response:
-            body = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        logger.exception("CDEK token request failed with status %s", exc.code)
-        raise TrackingError("CDEK_AUTH_FAILED") from exc
-    except Exception as exc:
-        logger.exception("CDEK token request failed")
+        response = _request_with_retry(
+            "post",
+            CDEK_TOKEN_URL,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as exc:
+        logger.exception("CDEK token request timed out")
         raise TrackingError("CDEK_AUTH_FAILED") from exc
     try:
-        data = json.loads(body)
-    except json.JSONDecodeError as exc:
+        data = response.json()
+    except ValueError as exc:
         logger.exception("CDEK token response is not JSON")
         raise TrackingError("CDEK_AUTH_FAILED") from exc
+    if not response.ok:
+        logger.exception("CDEK token request failed with status %s", response.status_code)
+        raise TrackingError("CDEK_AUTH_FAILED")
     token = data.get("access_token")
     expires_in = data.get("expires_in", 0)
     if not token:
@@ -493,30 +535,29 @@ def _parse_cdek_status(entity, track_number):
 
 def _fetch_cdek_order(track_number, token):
     url = f"{CDEK_ORDERS_URL}?cdek_number={urllib.parse.quote(track_number)}"
-    request_obj = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-    )
     try:
-        with urllib.request.urlopen(request_obj, timeout=20) as response:
-            body = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        if exc.code == 401:
-            raise TrackingError("CDEK_UNAUTHORIZED") from exc
-        if exc.code == 404:
-            raise TrackingError("ORDER_NOT_FOUND") from exc
-        logger.exception("CDEK tracking failed with status %s", exc.code)
+        response = _request_with_retry(
+            "get",
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+        )
+    except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as exc:
+        logger.exception("CDEK tracking timed out")
         raise TrackingError("CDEK_API_ERROR") from exc
-    except Exception as exc:
-        logger.exception("CDEK tracking failed")
-        raise TrackingError("CDEK_API_ERROR") from exc
+    if response.status_code == 401:
+        raise TrackingError("CDEK_UNAUTHORIZED")
+    if response.status_code == 404:
+        raise TrackingError("ORDER_NOT_FOUND")
+    if not response.ok:
+        logger.exception("CDEK tracking failed with status %s", response.status_code)
+        raise TrackingError("CDEK_API_ERROR")
 
     try:
-        data = json.loads(body)
-    except json.JSONDecodeError as exc:
+        data = response.json()
+    except ValueError as exc:
         logger.exception("CDEK tracking response is not JSON")
         raise TrackingError("CDEK_API_ERROR") from exc
 
@@ -530,15 +571,20 @@ def cdek_track(track_number):
     cleaned = (track_number or "").strip()
     if not cleaned:
         raise TrackingError("INVALID_TRACK_NUMBER")
+    cached = _get_cached_cdek_result(cleaned)
+    if cached:
+        return cached
 
     token = _get_cdek_token()
     try:
-        return _fetch_cdek_order(cleaned, token)
+        tracking = _fetch_cdek_order(cleaned, token)
     except TrackingError as exc:
         if exc.code != "CDEK_UNAUTHORIZED":
             raise
         token = _get_cdek_token(force_refresh=True)
-        return _fetch_cdek_order(cleaned, token)
+        tracking = _fetch_cdek_order(cleaned, token)
+    _cache_cdek_result(cleaned, tracking)
+    return tracking
 
 
 def resolve_shipment_status(track_number):
@@ -1151,7 +1197,7 @@ def refresh_shipment(shipment_id):
         return guard
     with get_db() as conn:
         shipment = conn.execute(
-            "SELECT display_number FROM shipments WHERE id = ?",
+            "SELECT display_number, cdek_state FROM shipments WHERE id = ?",
             (shipment_id,),
         ).fetchone()
         if not shipment:
@@ -1159,6 +1205,8 @@ def refresh_shipment(shipment_id):
         track_number = shipment["display_number"]
         if not track_number:
             return jsonify({"error": "Не задан трек-номер поставки"}), 409
+        if _is_final_cdek_status(shipment["cdek_state"]):
+            return jsonify({"ok": True})
         status_data, error = resolve_shipment_status(track_number)
         if error:
             return jsonify({"error": error}), 409
