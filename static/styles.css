@@ -200,6 +200,14 @@ body {
   justify-content: space-between;
 }
 
+.modal-card.wide .modal-header {
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 1;
+  padding: 8px 0;
+}
+
 .icon-btn {
   border: none;
   background: #f3f4f6;

@@ -7,8 +7,8 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body>
-    <div id="app">
+  <body data-authed="{{ 'true' if authed else 'false' }}">
+    <div id="app" class="{{ '' if authed else 'hidden' }}">
       <aside class="sidebar">
         <div class="brand">
           <h1>CASHER CRM</h1>
