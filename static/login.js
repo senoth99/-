@@ -27,7 +27,7 @@ function setError(message = "") {
 function setStep(step) {
   currentStep = step;
   document.querySelectorAll(".login-step").forEach((panel) => {
-    panel.classList.toggle("hidden", panel.dataset.step !== step);
+    panel.classList.toggle("active", panel.dataset.step === step);
   });
   document.querySelectorAll(".login-stepper-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.stepper === step);

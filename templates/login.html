@@ -25,7 +25,7 @@
           </div>
 
           <div class="login-steps">
-            <section class="login-step" data-step="role">
+            <section class="login-step active" data-step="role">
               <p class="subtitle">Выберите роль для входа в систему.</p>
               <div class="role-picker" id="role-picker">
                 <button class="role-option selected" type="button" data-role="admin">
@@ -40,18 +40,18 @@
               </div>
             </section>
 
-            <section class="login-step hidden" data-step="profile">
+            <section class="login-step" data-step="profile">
               <div class="profile-picker">
                 <p class="subtitle">Выберите профиль сотрудника для входа.</p>
                 <div class="profile-grid" id="employee-profiles"></div>
               </div>
               <div class="step-actions step-actions--stack">
-                <button class="ghost" id="profile-back">Назад</button>
+                <button class="secondary button-wide" id="profile-back">Назад</button>
                 <button class="primary button-wide" id="profile-next">Далее</button>
               </div>
             </section>
 
-            <section class="login-step hidden" data-step="password">
+            <section class="login-step" data-step="password">
               <div>
                 <p class="subtitle">Введите пароль доступа.</p>
                 <label>
@@ -60,7 +60,7 @@
                 </label>
               </div>
               <div class="step-actions step-actions--stack">
-                <button class="ghost" id="password-back">Назад</button>
+                <button class="secondary button-wide" id="password-back">Назад</button>
                 <button class="primary button-wide" id="login-submit">Войти</button>
               </div>
             </section>
