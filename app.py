@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_file, session
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +29,80 @@ CDEK_API_BASE = os.environ.get("CDEK_API_BASE", "https://api.cdek.ru/v2")
 
 _CDEK_TOKEN = None
 _CDEK_TOKEN_EXPIRES_AT = None
+
+CDEK_TRACKING_URL = "https://lk.cdek.ru/order-history/trace?orderNumber={track_number}"
+CDEK_TRACKING_CACHE_TTL = timedelta(minutes=8)
+CDEK_TRACKING_MIN_INTERVAL = timedelta(seconds=4)
+CDEK_TRACKING_SELECTORS = {
+    "order_number": [
+        "[data-test='order-number']",
+        ".order-number",
+        ".order__number",
+        "h1",
+        "h2",
+    ],
+    "route": [
+        "[data-test='route']",
+        ".order-route",
+        ".order__route",
+        ".tracking-route",
+    ],
+    "from_city": [
+        "[data-test='from-city']",
+        ".order-route__from",
+        ".route__from",
+    ],
+    "to_city": [
+        "[data-test='to-city']",
+        ".order-route__to",
+        ".route__to",
+    ],
+    "timeline_items": [
+        ".order-status__item",
+        ".tracking-timeline__item",
+        ".timeline__item",
+        ".status-timeline__item",
+        "li[data-test='timeline-item']",
+    ],
+    "timeline_title": [
+        ".order-status__title",
+        ".timeline__title",
+        ".status__title",
+        ".tracking-step__title",
+    ],
+    "timeline_date": [
+        ".order-status__date",
+        ".timeline__date",
+        ".status__date",
+        "time",
+    ],
+    "timeline_city": [
+        ".order-status__city",
+        ".timeline__city",
+        ".status__city",
+        ".tracking-step__city",
+    ],
+    "timeline_active": [
+        ".is-active",
+        ".active",
+        "[data-active='true']",
+        "[aria-current='step']",
+    ],
+    "current_status": [
+        ".tracking-current__status",
+        ".order-status__current",
+        ".current-status",
+    ],
+    "current_city": [
+        ".tracking-current__city",
+        ".order-status__location",
+        ".current-city",
+    ],
+}
+
+_CDEK_TRACKING_CACHE = {}
+_CDEK_TRACKING_LAST_FETCH = {}
+_CDEK_TRACKING_LAST_GLOBAL_FETCH = None
 
 
 def get_db():
@@ -324,6 +399,308 @@ def cdek_get_status(cdek_uuid: str):
     return status_payload, None
 
 
+class TrackingError(Exception):
+    def __init__(self, code, details=None):
+        super().__init__(details or code)
+        self.code = code
+        self.details = details or code
+
+
+def _normalize_text(value):
+    if not value:
+        return ""
+    return " ".join(str(value).split())
+
+
+def _extract_first_text(target, selectors):
+    for selector in selectors:
+        try:
+            locator = target.locator(selector)
+            if locator.count() > 0:
+                text = locator.first.text_content()
+                normalized = _normalize_text(text)
+                if normalized:
+                    return normalized
+        except Exception:
+            continue
+    return ""
+
+
+def _parse_date(value):
+    if not value:
+        return None
+    raw = _normalize_text(value)
+    match = re.search(r"(\\d{2})[./-](\\d{2})[./-](\\d{4})", raw)
+    if match:
+        day, month, year = match.groups()
+        return f"{year}-{month}-{day}"
+    match = re.search(r"(\\d{2})[./-](\\d{2})", raw)
+    if match:
+        day, month = match.groups()
+        return f"{datetime.utcnow().year}-{month}-{day}"
+    months = {
+        "января": 1,
+        "февраля": 2,
+        "марта": 3,
+        "апреля": 4,
+        "мая": 5,
+        "июня": 6,
+        "июля": 7,
+        "августа": 8,
+        "сентября": 9,
+        "октября": 10,
+        "ноября": 11,
+        "декабря": 12,
+    }
+    match = re.search(r"(\\d{1,2})\\s+([а-яА-Я]+)\\s+(\\d{4})", raw)
+    if match:
+        day, month_name, year = match.groups()
+        month = months.get(month_name.lower())
+        if month:
+            return f"{year}-{month:02d}-{int(day):02d}"
+    return None
+
+
+def _status_code_from_title(title, index):
+    lowered = (title or "").lower()
+    mapping = [
+        ("создан", "created"),
+        ("принят", "accepted"),
+        ("в пути", "in_transit"),
+        ("прибыл", "arrived"),
+        ("готов к выдаче", "ready_for_pickup"),
+        ("выдан", "delivered"),
+        ("доставлен", "delivered"),
+        ("отказ", "cancelled"),
+        ("возврат", "returning"),
+    ]
+    for fragment, code in mapping:
+        if fragment in lowered:
+            return code
+    return f"status_{index + 1}"
+
+
+def _timeline_item_is_active(item):
+    class_attr = (item.get_attribute("class") or "").lower()
+    if "active" in class_attr or "current" in class_attr:
+        return True
+    if (item.get_attribute("data-active") or "").lower() == "true":
+        return True
+    if (item.get_attribute("data-state") or "").lower() == "active":
+        return True
+    if (item.get_attribute("aria-current") or "").lower() == "step":
+        return True
+    for selector in CDEK_TRACKING_SELECTORS["timeline_active"]:
+        try:
+            if item.locator(selector).count() > 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _parse_route(route_text):
+    if not route_text:
+        return "", ""
+    cleaned = _normalize_text(route_text)
+    if "→" in cleaned:
+        parts = [part.strip() for part in cleaned.split("→", 1)]
+        if len(parts) == 2:
+            return parts[0], parts[1]
+    if "-" in cleaned:
+        parts = [part.strip() for part in cleaned.split("-", 1)]
+        if len(parts) == 2:
+            return parts[0], parts[1]
+    return "", ""
+
+
+def _is_uuid(value):
+    if not value:
+        return False
+    return bool(re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", value))
+
+
+def _get_cached_tracking(track_number):
+    cached = _CDEK_TRACKING_CACHE.get(track_number)
+    if not cached:
+        return None
+    if datetime.utcnow() >= cached["expires_at"]:
+        _CDEK_TRACKING_CACHE.pop(track_number, None)
+        return None
+    return cached["data"]
+
+
+def _mark_tracking_fetch(track_number):
+    global _CDEK_TRACKING_LAST_GLOBAL_FETCH
+    now = datetime.utcnow()
+    _CDEK_TRACKING_LAST_FETCH[track_number] = now
+    _CDEK_TRACKING_LAST_GLOBAL_FETCH = now
+
+
+def _should_rate_limit(track_number):
+    now = datetime.utcnow()
+    last_global = _CDEK_TRACKING_LAST_GLOBAL_FETCH
+    last_track = _CDEK_TRACKING_LAST_FETCH.get(track_number)
+    if last_global and now - last_global < CDEK_TRACKING_MIN_INTERVAL:
+        return True
+    if last_track and now - last_track < CDEK_TRACKING_MIN_INTERVAL:
+        return True
+    return False
+
+
+def _parse_tracking_page(page, track_number):
+    body_text = ""
+    try:
+        body_text = page.inner_text("body") or ""
+    except Exception:
+        body_text = ""
+    lowered_body = body_text.lower()
+    if "заказ не найден" in lowered_body or "order not found" in lowered_body:
+        raise TrackingError("ORDER_NOT_FOUND")
+    if "captcha" in lowered_body or "капча" in lowered_body:
+        raise TrackingError("CAPTCHA_REQUIRED")
+    if "доступ временно ограничен" in lowered_body or "access denied" in lowered_body:
+        raise TrackingError("PAGE_BLOCKED")
+
+    order_number_text = _extract_first_text(page, CDEK_TRACKING_SELECTORS["order_number"])
+    route_text = _extract_first_text(page, CDEK_TRACKING_SELECTORS["route"])
+    from_city = _extract_first_text(page, CDEK_TRACKING_SELECTORS["from_city"])
+    to_city = _extract_first_text(page, CDEK_TRACKING_SELECTORS["to_city"])
+    if route_text and (not from_city or not to_city):
+        parsed_from, parsed_to = _parse_route(route_text)
+        from_city = from_city or parsed_from
+        to_city = to_city or parsed_to
+
+    current_status = _extract_first_text(page, CDEK_TRACKING_SELECTORS["current_status"])
+    current_city = _extract_first_text(page, CDEK_TRACKING_SELECTORS["current_city"])
+
+    timeline_items = None
+    for selector in CDEK_TRACKING_SELECTORS["timeline_items"]:
+        locator = page.locator(selector)
+        if locator.count() > 0:
+            timeline_items = locator
+            break
+    if not timeline_items:
+        raise TrackingError("PAGE_PARSE_ERROR", "Timeline not found")
+
+    events = []
+    active_indices = []
+    for idx in range(timeline_items.count()):
+        item = timeline_items.nth(idx)
+        title = _extract_first_text(item, CDEK_TRACKING_SELECTORS["timeline_title"])
+        if not title:
+            title = _normalize_text(item.text_content())
+        date_text = _extract_first_text(item, CDEK_TRACKING_SELECTORS["timeline_date"])
+        parsed_date = _parse_date(date_text or title)
+        city_text = _extract_first_text(item, CDEK_TRACKING_SELECTORS["timeline_city"])
+        is_active = _timeline_item_is_active(item)
+        if is_active:
+            active_indices.append(idx)
+        events.append(
+            {
+                "code": _status_code_from_title(title, idx),
+                "title": title,
+                "date": parsed_date,
+                "city": city_text or None,
+                "active": is_active,
+            }
+        )
+
+    if not events:
+        raise TrackingError("PAGE_PARSE_ERROR", "Timeline empty")
+
+    active_index = active_indices[-1] if active_indices else len(events) - 1
+    active_event = events[active_index]
+    if not current_status:
+        current_status = active_event.get("title")
+    if not current_city:
+        current_city = active_event.get("city") or to_city
+
+    response_events = [
+        {key: value for key, value in event.items() if key != "active" and value}
+        for event in events
+    ]
+    return {
+        "track_number": track_number,
+        "order_number": order_number_text or track_number,
+        "status": current_status,
+        "current_city": current_city,
+        "from_city": from_city,
+        "to_city": to_city,
+        "events": response_events,
+    }
+
+
+def cdek_public_track(track_number):
+    cleaned = (track_number or "").strip()
+    if not cleaned:
+        raise TrackingError("INVALID_TRACK_NUMBER")
+
+    cached = _get_cached_tracking(cleaned)
+    if cached:
+        return cached
+
+    if _should_rate_limit(cleaned):
+        raise TrackingError("RATE_LIMIT")
+
+    _mark_tracking_fetch(cleaned)
+
+    url = CDEK_TRACKING_URL.format(track_number=urllib.parse.quote(cleaned))
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1280, "height": 720},
+            )
+            page = context.new_page()
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                page.wait_for_timeout(1500)
+                data = _parse_tracking_page(page, cleaned)
+            finally:
+                context.close()
+                browser.close()
+    except PlaywrightTimeoutError:
+        raise TrackingError("TIMEOUT")
+    except TrackingError:
+        raise
+    except Exception as exc:
+        raise TrackingError("PAGE_LOAD_FAILED", str(exc))
+
+    _CDEK_TRACKING_CACHE[cleaned] = {
+        "data": data,
+        "expires_at": datetime.utcnow() + CDEK_TRACKING_CACHE_TTL,
+        "cached_at": datetime.utcnow(),
+    }
+    return data
+
+
+def resolve_shipment_status(track_number, cdek_uuid):
+    if cdek_uuid and _is_uuid(cdek_uuid) and CDEK_CLIENT_ID and CDEK_CLIENT_SECRET:
+        status_data, error = cdek_get_status(cdek_uuid)
+        if not error and status_data:
+            return status_data, None
+    try:
+        tracking = cdek_public_track(track_number)
+    except TrackingError as exc:
+        return None, exc.code
+    last_date = None
+    if tracking.get("events"):
+        for event in tracking["events"]:
+            if event.get("date"):
+                last_date = event["date"]
+    return {
+        "status": tracking.get("status"),
+        "location": tracking.get("current_city"),
+        "timestamp": last_date,
+    }, None
+
+
 app.before_request(require_auth)
 
 
@@ -550,12 +927,10 @@ def refresh_shipment(shipment_id):
         ).fetchone()
         if not shipment:
             return jsonify({"error": "Поставка не найдена"}), 404
-        if not shipment["cdek_uuid"]:
-            return (
-                jsonify({"error": "Отправление ещё не зарегистрировано в CDEK"}),
-                409,
-            )
-        status_data, error = cdek_get_status(shipment["cdek_uuid"])
+        track_number = shipment["display_number"]
+        if not track_number:
+            return jsonify({"error": "Не задан трек-номер поставки"}), 409
+        status_data, error = resolve_shipment_status(track_number, shipment["cdek_uuid"])
         if error:
             return jsonify({"error": error}), 409
         conn.execute(
@@ -573,6 +948,27 @@ def refresh_shipment(shipment_id):
             ),
         )
     return jsonify({"ok": True})
+
+
+@app.post("/api/track")
+def track_public_shipment():
+    payload = request.get_json() or {}
+    track_number = (payload.get("track_number") or "").strip()
+    if not track_number:
+        return jsonify({"error": "INVALID_TRACK_NUMBER"}), 400
+    try:
+        data = cdek_public_track(track_number)
+    except TrackingError as exc:
+        status_map = {
+            "ORDER_NOT_FOUND": 404,
+            "RATE_LIMIT": 429,
+            "CAPTCHA_REQUIRED": 409,
+            "PAGE_BLOCKED": 409,
+            "TIMEOUT": 504,
+            "INVALID_TRACK_NUMBER": 400,
+        }
+        return jsonify({"error": exc.code}), status_map.get(exc.code, 502)
+    return jsonify(data)
 
 
 @app.delete("/api/shipments/<int:shipment_id>")
