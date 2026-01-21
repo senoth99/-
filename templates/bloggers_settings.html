@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — Настройки блогеров</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body bloggers-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+    data-profile-login="{{ profile_login }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/bloggers">Назад</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="bloggers-hero">
+          <span class="hero-badge">Настройки</span>
+          <h2>Настраивайте списки ниш, форматов и изделий.</h2>
+          <p>
+            Все значения автоматически подхватываются в интеграциях и базе блогеров.
+            Доступ на изменение выдаётся администратором.
+          </p>
+        </section>
+
+        <section class="bloggers-section" id="blogger-settings">
+          <div class="section-head">
+            <div>
+              <h3>Настройки для блогеров</h3>
+              <p class="subtitle">
+                Пул ниш, изделий, цветов и форматов редактируется только пользователями
+                с доступом к настройкам блогеров.
+              </p>
+            </div>
+            <div class="section-actions">
+              {% if access_map.bloggers_settings %}
+                <span class="pill success">Доступ открыт</span>
+              {% else %}
+                <span class="pill neutral">Нет доступа</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if access_map.bloggers_settings %}
+            <div class="settings-grid" id="settings-grid"></div>
+            <p class="settings-note">
+              Эти настройки синхронизируются с формами интеграций и базой блогеров.
+            </p>
+          {% else %}
+            <div class="info-card" aria-disabled="true">
+              <h4>Доступ ограничен</h4>
+              <p class="subtitle">
+                Запросите доступ к настройкам у администратора, чтобы изменять списки
+                ниш, изделий и форматов.
+              </p>
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/bloggers.js"></script>
+  </body>
+</html>
