@@ -51,6 +51,10 @@ async function goToStep2() {
     return;
   }
   state.profileId = null;
+  if (state.role === "admin") {
+    setStep(3);
+    return;
+  }
   await fetchProfiles();
   setStep(2);
 }
@@ -257,7 +261,11 @@ function createPasswordStep() {
   backButton.textContent = "Назад";
   backButton.addEventListener("click", () => {
     setError();
-    setStep(2);
+    if (state.role === "admin") {
+      setStep(1);
+    } else {
+      setStep(2);
+    }
   });
 
   const submitButton = document.createElement("button");
@@ -271,7 +279,7 @@ function createPasswordStep() {
       setError("Введите пароль.");
       return;
     }
-    if (!state.role || !state.profileId) {
+    if (!state.role || (state.role === "employee" && !state.profileId)) {
       setError("Вернитесь и заполните предыдущие шаги.");
       return;
     }
