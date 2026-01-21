@@ -6,6 +6,7 @@
     <title>CASHER CRM — Настройки блогеров</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/theme.js" defer></script>
   </head>
   <body
     class="crm-body bloggers-page"
@@ -44,13 +45,11 @@
                 с доступом к настройкам блогеров.
               </p>
             </div>
-            <div class="section-actions">
-              {% if access_map.bloggers_settings %}
-                <span class="pill success">Доступ открыт</span>
-              {% else %}
+            {% if not access_map.bloggers_settings %}
+              <div class="section-actions">
                 <span class="pill neutral">Нет доступа</span>
-              {% endif %}
-            </div>
+              </div>
+            {% endif %}
           </div>
           {% if access_map.bloggers_settings %}
             <div class="settings-grid" id="settings-grid"></div>
