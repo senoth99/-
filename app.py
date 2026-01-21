@@ -708,9 +708,7 @@ def logout():
 
 @app.get("/api/employees")
 def list_employees():
-    is_public = request.args.get("public") == "true"
-    if not session.get("authed") and not is_public:
-        return jsonify({"error": "unauthorized"}), 401
+    is_public = request.args.get("public") == "true" or not session.get("authed")
     if session.get("authed") and get_role() != ROLE_ADMIN and not is_public:
         return jsonify({"error": "forbidden"}), 403
     with get_db() as conn:
