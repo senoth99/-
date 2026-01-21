@@ -8,46 +8,178 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body
-    class="crm-body"
+    class="crm-body bloggers-page"
     data-authed="{{ 'true' if authed else 'false' }}"
     data-role="{{ role }}"
+    data-profile-login="{{ profile_login }}"
   >
     <div class="crm-background" aria-hidden="true">
       <span class="crm-orb orb-1"></span>
       <span class="crm-orb orb-2"></span>
       <span class="crm-orb orb-3"></span>
     </div>
-    <div class="page-shell">
-      <main class="page-main">
-        <section class="page-hero">
-          <div class="hero-card">
-            <h2>Работа с блогерами</h2>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="bloggers-hero">
+          <span class="hero-badge">Работа с блогерами</span>
+          <h2>Управляйте интеграциями и базой блогеров в одном месте.</h2>
+          <p>
+            Здесь собираются карточки блогеров, история интеграций и пул настроек для
+            командной работы. Все данные адаптированы под вашу внутреннюю базу.
+          </p>
+        </section>
+
+        <section class="menu-card menu-card--wide menu-card--static bloggers-action-card">
+          <div>
+            <h3>Интеграции</h3>
             <p class="subtitle">
-              Мы готовим раздел для управления коллаборациями, графиком публикаций и
-              аналитикой. Сейчас это чистый холст для будущей функциональности.
+              Создавайте новые интеграции, фиксируйте условия и отслеживайте статусы.
             </p>
           </div>
-          <div class="placeholder-grid">
-            <div class="placeholder-card">
-              <div class="placeholder-icon">🎯</div>
-              <h3>Планы кампаний</h3>
-              <p class="subtitle">Шаблоны договоренностей и трекинг статусов.</p>
-            </div>
-            <div class="placeholder-card">
-              <div class="placeholder-icon">📊</div>
-              <h3>Отчеты</h3>
-              <p class="subtitle">Метрики охвата, переходов и эффективности.</p>
-            </div>
-            <div class="placeholder-card">
-              <div class="placeholder-icon">🗂️</div>
+          <div class="section-actions">
+            <a class="primary" href="/bloggers/integrations">Интеграции</a>
+          </div>
+        </section>
+
+        <section class="bloggers-section" id="blogger-base">
+          <div class="section-head">
+            <div>
               <h3>База блогеров</h3>
-              <p class="subtitle">Контакты, форматы, условия сотрудничества.</p>
+              <p class="subtitle">
+                Поиск по имени, тегам или ссылкам на соцсети. Поиск допускает небольшие
+                опечатки.
+              </p>
+            </div>
+            <div class="section-actions">
+              <button class="secondary" id="open-add-blogger">Добавить блогера</button>
             </div>
           </div>
+          <div class="filter-bar">
+            <input
+              type="text"
+              id="blogger-search"
+              placeholder="Поиск по ФИО, тегу, ссылке..."
+            />
+            <select id="blogger-category-filter">
+              <option value="all">Все категории</option>
+              <option value="Микро">Микро</option>
+              <option value="Мидл">Мидл</option>
+              <option value="Крупный">Крупный</option>
+            </select>
+            <select id="blogger-niche-filter">
+              <option value="all">Все ниши</option>
+            </select>
+          </div>
+          <div class="list-grid" id="blogger-list"></div>
+        </section>
+
+        <section class="bloggers-section" id="blogger-settings">
+          <div class="section-head">
+            <div>
+              <h3>Настройки для блогеров</h3>
+              <p class="subtitle">
+                Пул ниш, изделий, цветов и форматов редактируется только пользователями с
+                доступом к настройкам блогеров.
+              </p>
+            </div>
+            <div class="section-actions">
+              {% if access_map.bloggers_settings %}
+                <span class="pill success">Доступ открыт</span>
+              {% else %}
+                <span class="pill neutral">Нет доступа</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if access_map.bloggers_settings %}
+            <div class="settings-grid" id="settings-grid"></div>
+            <p class="settings-note">
+              Эти настройки синхронизируются с формами интеграций и базой блогеров.
+            </p>
+          {% else %}
+            <div class="info-card" aria-disabled="true">
+              <h4>Доступ ограничен</h4>
+              <p class="subtitle">
+                Запросите доступ к настройкам у администратора, чтобы изменять списки
+                ниш, изделий и форматов.
+              </p>
+            </div>
+          {% endif %}
         </section>
       </main>
     </div>
 
-    <script src="/static/home.js"></script>
+    <div class="modal hidden" id="blogger-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3 id="blogger-modal-title">Добавить блогера</h3>
+            <p class="modal-subtitle">Все поля можно дополнить позже.</p>
+          </div>
+          <button class="icon-btn" data-close-modal="blogger-modal">✕</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            ФИО
+            <input type="text" id="blogger-name" placeholder="Мария Иванова" />
+          </label>
+          <label>
+            Ссылка на инстаграм
+            <input type="text" id="blogger-instagram" placeholder="instagram.com/" />
+          </label>
+          <label>
+            Ссылка на телеграм
+            <input type="text" id="blogger-telegram" placeholder="t.me/" />
+          </label>
+          <label>
+            Ссылка на тикток
+            <input type="text" id="blogger-tiktok" placeholder="tiktok.com/@" />
+          </label>
+          <label>
+            Ниша
+            <select id="blogger-niche"></select>
+          </label>
+          <label>
+            Категория
+            <select id="blogger-category">
+              <option value="Микро">Микро</option>
+              <option value="Мидл">Мидл</option>
+              <option value="Крупный">Крупный</option>
+            </select>
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="blogger-modal">Отмена</button>
+          <button class="primary" id="save-blogger">Сохранить блогера</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="blogger-detail-modal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <div>
+            <h3 id="blogger-detail-name">Блогер</h3>
+            <p class="modal-subtitle" id="blogger-detail-subtitle"></p>
+          </div>
+          <button class="icon-btn" data-close-modal="blogger-detail-modal">✕</button>
+        </div>
+        <div class="integration-summary" id="blogger-detail-info"></div>
+        <div>
+          <h4>Интеграции с блогером</h4>
+          <div class="list-grid" id="blogger-detail-integrations"></div>
+        </div>
+        <div class="card-actions">
+          <button class="secondary" data-close-modal="blogger-detail-modal">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/bloggers.js"></script>
   </body>
 </html>
