@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Вход · CASHER CRM</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="login-body">
+    <div class="login-shell">
+      <div class="login-background" aria-hidden="true">
+        <span class="orb orb-1"></span>
+        <span class="orb orb-2"></span>
+        <span class="orb orb-3"></span>
+        <span class="orb orb-4"></span>
+      </div>
+
+      <main class="login-main">
+        <div class="login-card">
+          <div class="login-header">
+            <span class="login-badge">CRM-доступ</span>
+            <h1>Вход в CASHER CRM</h1>
+            <p class="subtitle">Введите пароль, чтобы перейти в меню.</p>
+          </div>
+          <label>
+            Пароль
+            <input type="password" id="login-password" placeholder="Введите пароль" />
+          </label>
+          <button class="primary" id="login-submit">Войти</button>
+          <div class="error" id="login-error"></div>
+        </div>
+      </main>
+    </div>
+
+    <script src="/static/login.js"></script>
+  </body>
+</html>

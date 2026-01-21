@@ -519,6 +519,11 @@ td {
   gap: 40px;
 }
 
+.home-shell.menu-only {
+  justify-content: center;
+  align-items: center;
+}
+
 .home-header {
   display: flex;
   justify-content: space-between;
@@ -626,6 +631,126 @@ td {
 .menu-cta {
   font-weight: 600;
   color: #4338ca;
+}
+
+.login-body {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.login-shell {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  overflow: hidden;
+}
+
+.login-background {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(99, 102, 241, 0.35), transparent 60%),
+    radial-gradient(circle at bottom, rgba(139, 92, 246, 0.25), transparent 55%);
+}
+
+.orb {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  filter: blur(10px);
+  opacity: 0.6;
+  animation: float 18s ease-in-out infinite;
+}
+
+.orb-1 {
+  top: -120px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.7), transparent 70%);
+}
+
+.orb-2 {
+  bottom: -160px;
+  right: -120px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.55), transparent 70%);
+  animation-delay: -6s;
+}
+
+.orb-3 {
+  top: 20%;
+  right: -140px;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.45), transparent 70%);
+  animation-delay: -12s;
+}
+
+.orb-4 {
+  bottom: 10%;
+  left: 15%;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.45), transparent 70%);
+  animation-delay: -9s;
+}
+
+.login-main {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+}
+
+.login-card {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 24px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(18px);
+  animation: fadeUp 0.6s ease;
+}
+
+.login-header h1 {
+  font-size: 26px;
+}
+
+.login-badge {
+  display: inline-flex;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  margin-bottom: 12px;
+}
+
+.login-card label {
+  color: #e2e8f0;
+}
+
+.login-card input[type="password"] {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #f8fafc;
+}
+
+.login-card input[type="password"]::placeholder {
+  color: rgba(248, 250, 252, 0.6);
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(20px, -30px) scale(1.05);
+  }
 }
 
 .page-shell {
