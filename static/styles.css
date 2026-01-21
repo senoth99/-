@@ -1465,6 +1465,37 @@ td {
   color: #475569;
 }
 
+.bloggers-tabs .menu-grid {
+  width: 100%;
+}
+
+.bloggers-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.menu-card--tab {
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.menu-card--tab:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 3px;
+}
+
+.menu-card--tab.is-active {
+  transform: translateY(-6px);
+  box-shadow: 0 26px 44px rgba(99, 102, 241, 0.25);
+}
+
+.menu-card--tab.is-active::after {
+  opacity: 1;
+}
+
 .bloggers-action-card {
   display: flex;
   align-items: center;
