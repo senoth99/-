@@ -10,6 +10,11 @@ const qs = (id) => document.getElementById(id);
 
 const openModal = (id) => modal(id).classList.remove("hidden");
 const closeModal = (id) => modal(id).classList.add("hidden");
+const setAppVisibility = (isVisible) => {
+  const app = qs("app");
+  if (!app) return;
+  app.classList.toggle("hidden", !isVisible);
+};
 
 const formatNumber = (value) =>
   new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(
@@ -33,33 +38,12 @@ const formatCurrency = (value) => {
   }).format(number);
 };
 
-const formatPhones = (value) => {
-  if (!value) return null;
-  if (Array.isArray(value)) {
-    return value.filter(Boolean).join(", ");
-  }
-  return String(value);
-};
-
 const formatPerson = (person) => {
   if (!person) return null;
   const parts = [person.name, person.company, person.phone]
     .map((item) => (typeof item === "string" ? item.trim() : ""))
     .filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
-};
-
-const resolveDeliveryMethod = (order) => {
-  if (!order) return null;
-  const detail = order.delivery_detail || {};
-  const mode = (order.delivery_mode || "").toLowerCase();
-  if (detail.delivery_point || /pvz|pickup|office|point/.test(mode)) {
-    return "В ПВЗ";
-  }
-  if (detail.address || /door|courier/.test(mode)) {
-    return "Курьером";
-  }
-  return null;
 };
 
 const resolveAddress = (location, detail) => {
@@ -180,6 +164,7 @@ async function api(path, options = {}) {
   });
   if (response.status === 401) {
     openModal("login-modal");
+    setAppVisibility(false);
     throw new Error("unauthorized");
   }
   if (!response.ok) {
@@ -387,7 +372,6 @@ async function openShipmentDetails(shipmentId) {
     const deliveryDetail = order.delivery_detail || {};
     const fromLocation = order.from_location || {};
     const toLocation = order.to_location || {};
-    const deliveryMethod = resolveDeliveryMethod(order);
     const deliveryPoint = deliveryDetail.delivery_point || deliveryDetail.point;
 
     renderDetailItems(mainContainer, [
@@ -408,7 +392,6 @@ async function openShipmentDetails(shipmentId) {
         value:
           tracking.status?.city || shipment.last_location || "Локация неизвестна",
       },
-      { label: "Способ доставки", value: deliveryMethod || "Не указан" },
       {
         label: "Откуда",
         value: fromLocation.city || shipment.origin_label,
@@ -433,14 +416,8 @@ async function openShipmentDetails(shipmentId) {
 
     renderDetailItems(extraContainer, [
       { label: "Получатель", value: formatPerson(recipient) || recipient.name },
-      { label: "Телефон получателя", value: formatPhones(recipient.phone || recipient.phones) },
       { label: "Email получателя", value: recipient.email },
       { label: "Отправитель", value: formatPerson(sender) || sender.name },
-      { label: "Телефон отправителя", value: formatPhones(sender.phone || sender.phones) },
-      {
-        label: "Тариф",
-        value: order.tariff_name || order.tariff_code,
-      },
       {
         label: "Стоимость доставки",
         value: formatCurrency(order.delivery_sum),
@@ -475,7 +452,9 @@ async function handleLogin() {
       body: JSON.stringify({ password }),
     });
     closeModal("login-modal");
+    setAppVisibility(true);
     await loadLocations();
+    await loadShipments();
   } catch (err) {
     error.textContent = err.message;
   }
@@ -680,6 +659,7 @@ function registerEvents() {
   qs("upload-submit").addEventListener("click", submitUpload);
   qs("logout-btn").addEventListener("click", async () => {
     await api("/api/logout", { method: "POST" });
+    setAppVisibility(false);
     openModal("login-modal");
   });
 
@@ -720,6 +700,12 @@ function registerEvents() {
 
 async function init() {
   registerEvents();
+  const isAuthed = document.body?.dataset?.authed === "true";
+  if (!isAuthed) {
+    setAppVisibility(false);
+    openModal("login-modal");
+    return;
+  }
   try {
     await loadLocations();
     await loadShipments();
