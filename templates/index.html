@@ -7,8 +7,24 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body>
-    <div class="home-shell menu-only">
+  <body data-role="{{ role }}">
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="brand">
+          <h1>CASHER CRM</h1>
+          <p>Контроль оффлайн продаж</p>
+        </div>
+        <div class="topbar-actions">
+          <div class="profile-chip">
+            <div class="profile-avatar">{{ "A" if role == "admin" else "S" }}</div>
+            <div class="profile-meta">
+              <span class="profile-name">Профиль</span>
+              <span class="profile-role">{{ role_label }}</span>
+            </div>
+          </div>
+          <button class="ghost logout-btn" id="logout-btn">Выйти</button>
+        </div>
+      </header>
       <main class="home-main">
         <section class="menu-panel">
           <div class="menu-grid">
@@ -32,5 +48,7 @@
         </section>
       </main>
     </div>
+
+    <script src="/static/home.js"></script>
   </body>
 </html>

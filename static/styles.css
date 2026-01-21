@@ -103,6 +103,67 @@ body {
   gap: 12px;
 }
 
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  animation: fadeUp 0.6s ease;
+}
+
+.profile-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-name {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b7280;
+}
+
+.profile-role {
+  font-weight: 600;
+  color: #111827;
+  font-size: 14px;
+}
+
+.logout-btn {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.logout-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.2);
+}
+
+.admin-only {
+  display: inline-flex;
+}
+
+body[data-role="employee"] .admin-only {
+  display: none !important;
+}
+
 .subtitle {
   font-size: 14px;
   color: #6b7280;
@@ -122,6 +183,31 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.animated-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.animated-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(140deg, rgba(99, 102, 241, 0.12), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.animated-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 24px 40px rgba(99, 102, 241, 0.18);
+}
+
+.animated-card:hover::after {
+  opacity: 1;
 }
 
 .card h3 {
@@ -731,6 +817,29 @@ td {
 
 .login-card label {
   color: #e2e8f0;
+}
+
+.role-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-option {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.45);
+  color: #e2e8f0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.role-option.selected {
+  border-color: rgba(99, 102, 241, 0.8);
+  box-shadow: 0 16px 28px rgba(99, 102, 241, 0.35);
+  transform: translateY(-2px);
 }
 
 .login-card input[type="password"] {

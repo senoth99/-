@@ -25,6 +25,9 @@ app.config["UPLOAD_DIR"] = UPLOAD_DIR
 logger = logging.getLogger(__name__)
 
 PASSWORD = os.environ.get("APP_PASSWORD", "admin")
+ROLE_ADMIN = "admin"
+ROLE_EMPLOYEE = "employee"
+AUTH_TTL = timedelta(days=7)
 CDEK_API_BASE_URL = "https://api.cdek.ru/v2"
 CDEK_TOKEN_URL = f"{CDEK_API_BASE_URL}/oauth/token"
 CDEK_ORDERS_URL = f"{CDEK_API_BASE_URL}/orders"
@@ -204,12 +207,42 @@ def require_auth():
     protected_pages = {"/", "/locations", "/bloggers"}
     if request.path.startswith("/static"):
         return None
+    if session.get("authed") and not is_auth_fresh():
+        session.clear()
     if request.path in open_paths:
         return None
     if request.path in protected_pages and not session.get("authed"):
         return redirect("/login")
     if not session.get("authed"):
         return jsonify({"error": "unauthorized"}), 401
+    return None
+
+
+def is_auth_fresh():
+    last_auth = session.get("last_auth_at")
+    if not last_auth:
+        return False
+    try:
+        last_auth_time = datetime.fromisoformat(last_auth)
+    except ValueError:
+        return False
+    return datetime.utcnow() - last_auth_time <= AUTH_TTL
+
+
+def get_role():
+    role = session.get("role")
+    if role in {ROLE_ADMIN, ROLE_EMPLOYEE}:
+        return role
+    return ROLE_EMPLOYEE
+
+
+def get_role_label(role):
+    return "Админ" if role == ROLE_ADMIN else "Сотрудник"
+
+
+def require_admin():
+    if get_role() != ROLE_ADMIN:
+        return jsonify({"error": "forbidden"}), 403
     return None
 
 
@@ -397,7 +430,8 @@ app.before_request(require_auth)
 def index():
     if not session.get("authed"):
         return redirect("/login")
-    return render_template("index.html")
+    role = get_role()
+    return render_template("index.html", role=role, role_label=get_role_label(role))
 
 
 @app.route("/login")
@@ -411,22 +445,39 @@ def login_page():
 def locations():
     if not session.get("authed"):
         return redirect("/")
-    return render_template("locations.html", authed=True)
+    role = get_role()
+    return render_template(
+        "locations.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+    )
 
 
 @app.route("/bloggers")
 def bloggers():
     if not session.get("authed"):
         return redirect("/")
-    return render_template("bloggers.html", authed=True)
+    role = get_role()
+    return render_template(
+        "bloggers.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+    )
 
 
 @app.post("/api/login")
 def login():
     payload = request.get_json() or {}
+    role = payload.get("role", ROLE_EMPLOYEE)
+    if role not in {ROLE_ADMIN, ROLE_EMPLOYEE}:
+        return jsonify({"ok": False, "error": "Неизвестная роль"}), 400
     if payload.get("password") == PASSWORD:
         session["authed"] = True
-        return jsonify({"ok": True})
+        session["role"] = role
+        session["last_auth_at"] = datetime.utcnow().isoformat()
+        return jsonify({"ok": True, "role": role})
     return jsonify({"ok": False, "error": "Неверный пароль"}), 401
 
 
@@ -457,6 +508,9 @@ def get_locations():
 
 @app.post("/api/locations")
 def add_location():
+    guard = require_admin()
+    if guard:
+        return guard
     payload = request.get_json() or {}
     name = payload.get("name", "").strip()
     address = payload.get("address", "").strip()
@@ -488,6 +542,9 @@ def get_records(location_id):
 
 @app.delete("/api/locations/<int:location_id>")
 def delete_location(location_id):
+    guard = require_admin()
+    if guard:
+        return guard
     with get_db() as conn:
         conn.execute("DELETE FROM records WHERE location_id = ?", (location_id,))
         result = conn.execute("DELETE FROM locations WHERE id = ?", (location_id,))
@@ -498,6 +555,9 @@ def delete_location(location_id):
 
 @app.post("/api/upload")
 def upload_file():
+    guard = require_admin()
+    if guard:
+        return guard
     location_id = request.form.get("location_id", type=int)
     file = request.files.get("file")
     if not location_id:
@@ -585,6 +645,9 @@ def get_shipments():
 
 @app.post("/api/shipments")
 def add_shipment():
+    guard = require_admin()
+    if guard:
+        return guard
     payload = request.get_json() or {}
     origin_label = payload.get("origin_label", "").strip()
     destination_label = payload.get("destination_label", "").strip()
@@ -635,6 +698,9 @@ def add_shipment():
 
 @app.post("/api/shipments/<int:shipment_id>/refresh")
 def refresh_shipment(shipment_id):
+    guard = require_admin()
+    if guard:
+        return guard
     with get_db() as conn:
         shipment = conn.execute(
             "SELECT display_number FROM shipments WHERE id = ?",
@@ -688,6 +754,9 @@ def track_public_shipment():
 
 @app.delete("/api/shipments/<int:shipment_id>")
 def delete_shipment(shipment_id):
+    guard = require_admin()
+    if guard:
+        return guard
     with get_db() as conn:
         result = conn.execute(
             "DELETE FROM shipments WHERE id = ?",

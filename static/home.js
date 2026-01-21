@@ -48,7 +48,7 @@ async function handleLogin() {
 
 async function handleLogout() {
   await api("/api/logout", { method: "POST" });
-  togglePanels(false);
+  window.location.assign("/login");
 }
 
 function init() {
