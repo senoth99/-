@@ -12,6 +12,7 @@
     data-authed="{{ 'true' if authed else 'false' }}"
     data-role="{{ role }}"
     data-profile-login="{{ profile_login }}"
+    data-access-bloggers-settings="{{ 'true' if access_map.bloggers_settings else 'false' }}"
   >
     <div class="crm-background" aria-hidden="true">
       <span class="crm-orb orb-1"></span>
@@ -157,6 +158,7 @@
           <div class="list-grid" id="blogger-detail-integrations"></div>
         </div>
         <div class="card-actions">
+          <button class="ghost danger hidden" id="delete-blogger">Удалить блогера</button>
           <button class="secondary" data-close-modal="blogger-detail-modal">Закрыть</button>
         </div>
       </div>

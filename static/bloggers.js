@@ -93,6 +93,7 @@ const state = {
 
 let selectedBloggerId = null;
 let activeIntegrationId = null;
+let activeBloggerId = null;
 
 const toastDurationMs = 10000;
 const toastLimit = 3;
@@ -804,6 +805,7 @@ const getMonthKey = (dateValue) => {
 const renderIntegrationStats = () => {
   const countEl = qs("#stats-count");
   if (!countEl) return;
+  const agreementsEl = qs("#stats-agreements");
   const { month: selectedMonth = "", startDate = "", endDate = "" } =
     state.statsFilters || {};
   const subfilter = qs("#stats-subfilter");
@@ -821,7 +823,21 @@ const renderIntegrationStats = () => {
     return true;
   });
 
-  const totals = filtered.reduce(
+  const todayValue = getTodayValue();
+  const splitByDate = filtered.reduce(
+    (acc, integration) => {
+      if (!integration.date) return acc;
+      if (integration.date < todayValue) {
+        acc.integrations.push(integration);
+      } else {
+        acc.agreements.push(integration);
+      }
+      return acc;
+    },
+    { integrations: [], agreements: [] }
+  );
+
+  const totals = splitByDate.integrations.reduce(
     (acc, integration) => {
       acc.budget += parseNumber(integration.budget);
       acc.reach += parseNumber(integration.reach);
@@ -844,6 +860,9 @@ const renderIntegrationStats = () => {
   })();
 
   countEl.textContent = formatInteger(totals.count);
+  if (agreementsEl) {
+    agreementsEl.textContent = formatInteger(splitByDate.agreements.length);
+  }
   qs("#stats-budget").textContent = totals.count
     ? formatCurrency(totals.budget)
     : "—";
@@ -972,6 +991,7 @@ const exportIntegrations = () => {
 const renderBloggerDetail = (bloggerId) => {
   const blogger = state.bloggers.find((item) => item.id === bloggerId);
   if (!blogger) return;
+  activeBloggerId = bloggerId;
   qs("#blogger-detail-name").textContent = blogger.name;
   qs("#blogger-detail-subtitle").textContent = `${blogger.niche} • ${blogger.category}`;
   qs("#blogger-detail-info").innerHTML = [
@@ -1005,6 +1025,41 @@ const renderBloggerDetail = (bloggerId) => {
           .join("")
       : "<p class='subtitle'>Интеграций пока нет.</p>";
   }
+  const deleteButton = qs("#delete-blogger");
+  if (deleteButton) {
+    deleteButton.classList.toggle("hidden", !canViewOverallStats);
+  }
+};
+
+const deleteBlogger = () => {
+  if (!activeBloggerId) return;
+  if (!canViewOverallStats) {
+    showNotification("Нет прав для удаления блогера.", "error");
+    return;
+  }
+  const blogger = state.bloggers.find((item) => item.id === activeBloggerId);
+  const relatedCount = state.integrations.filter(
+    (integration) => integration.bloggerId === activeBloggerId
+  ).length;
+  const confirmText = `Удалить блогера ${blogger?.name || ""}${
+    relatedCount ? ` и ${relatedCount} интеграций` : ""
+  }?`;
+  if (!window.confirm(confirmText.trim())) return;
+  state.bloggers = state.bloggers.filter((item) => item.id !== activeBloggerId);
+  state.integrations = state.integrations.filter(
+    (integration) => integration.bloggerId !== activeBloggerId
+  );
+  if (selectedBloggerId === activeBloggerId) {
+    selectedBloggerId = null;
+    const input = qs("#integration-blogger");
+    if (input) input.value = "";
+  }
+  activeBloggerId = null;
+  closeModal("blogger-detail-modal");
+  renderBloggerList();
+  renderBloggerPicker();
+  refreshIntegrationViews();
+  showNotification("Блогер удален из базы.", "info");
 };
 
 const resetBloggerForm = () => {
@@ -1162,6 +1217,10 @@ const openIntegrationDetail = (integrationId) => {
       ]);
     };
   }
+  const deleteButton = qs("#delete-integration");
+  if (deleteButton) {
+    deleteButton.classList.toggle("hidden", !canViewOverallStats);
+  }
   openModal("integration-detail-modal");
 };
 
@@ -1185,6 +1244,25 @@ const saveIntegrationDetail = () => {
   closeModal("integration-detail-modal");
   refreshIntegrationViews();
   showNotification("Изменения по интеграции сохранены.", "success");
+};
+
+const deleteIntegration = () => {
+  if (!activeIntegrationId) return;
+  if (!canViewOverallStats) {
+    showNotification("Нет прав для удаления интеграции.", "error");
+    return;
+  }
+  const integration = state.integrations.find((item) => item.id === activeIntegrationId);
+  const blogger = state.bloggers.find((item) => item.id === integration?.bloggerId);
+  const confirmText = `Удалить интеграцию${blogger ? ` с ${blogger.name}` : ""}?`;
+  if (!window.confirm(confirmText)) return;
+  state.integrations = state.integrations.filter(
+    (item) => item.id !== activeIntegrationId
+  );
+  activeIntegrationId = null;
+  closeModal("integration-detail-modal");
+  refreshIntegrationViews();
+  showNotification("Интеграция удалена.", "info");
 };
 
 const initSettingsInteractions = () => {
@@ -1317,6 +1395,8 @@ const initBasePage = () => {
     renderBloggerDetail(bloggerId);
     openModal("blogger-detail-modal");
   });
+
+  qs("#delete-blogger")?.addEventListener("click", deleteBlogger);
 };
 
 const initSettingsPage = () => {
@@ -1465,6 +1545,7 @@ const initIntegrationsPage = () => {
     if (qs("#export-integrations")?.disabled) return;
     exportIntegrations();
   });
+  qs("#delete-integration")?.addEventListener("click", deleteIntegration);
 };
 
 const initModals = () => {
