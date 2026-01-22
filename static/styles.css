@@ -446,6 +446,13 @@ body[data-role="employee"] .admin-only {
   overflow: hidden;
 }
 
+.modal-card.wide.popup {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -2024,6 +2031,13 @@ td {
   position: relative;
 }
 
+.filters-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
 .stats-control {
   display: flex;
   align-items: center;
@@ -2057,7 +2071,7 @@ td {
   transform: rotate(180deg);
 }
 
-.stats-subfilter {
+.date-range-panel {
   display: flex;
   gap: 12px;
   padding: 0 12px;
@@ -2065,17 +2079,19 @@ td {
   background: #f8fafc;
   border: 1px solid rgba(148, 163, 184, 0.3);
   position: absolute;
-  top: calc(100% + 8px);
+  top: 100%;
   right: 0;
+  margin-top: 8px;
   max-height: 0;
   opacity: 0;
   transform: translateY(-6px);
   overflow: hidden;
   transition: max-height 250ms ease, opacity 250ms ease, transform 250ms ease;
   pointer-events: none;
+  z-index: 20;
 }
 
-.stats-subfilter.is-open {
+.date-range-panel.is-open {
   max-height: 120px;
   padding: 10px 12px;
   opacity: 1;

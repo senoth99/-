@@ -99,6 +99,11 @@ const state = {
       contacts: "instagram.com/gromov_life",
     },
   ],
+  statsFilters: {
+    month: "",
+    startDate: "",
+    endDate: "",
+  },
 };
 
 let selectedBloggerId = null;
@@ -256,6 +261,11 @@ const setStatsDateDefaults = () => {
   if (endInput && !endInput.value) endInput.value = today;
   if (startDisplay) startDisplay.value = formatDateDisplay(startInput?.value || "");
   if (endDisplay) endDisplay.value = formatDateDisplay(endInput?.value || "");
+  updateStatistics({
+    month: monthInput?.value || "",
+    startDate: startInput?.value || "",
+    endDate: endInput?.value || "",
+  });
 };
 
 const renderMonthPicker = (panel, year, selectedMonth) => {
@@ -388,7 +398,7 @@ const initStatsDatePickers = () => {
         targetInput.value = value;
         displayInput.value = formatMonthDisplay(value);
         panel.classList.remove("is-open");
-        renderIntegrationStats();
+        updateStatistics({ month: value });
       }
 
       const dayButton = event.target.closest("[data-day]");
@@ -400,7 +410,11 @@ const initStatsDatePickers = () => {
         targetInput.value = value;
         displayInput.value = formatDateDisplay(value);
         panel.classList.remove("is-open");
-        renderIntegrationStats();
+        if (targetInput.id === "stats-date-start") {
+          updateStatistics({ startDate: value });
+        } else if (targetInput.id === "stats-date-end") {
+          updateStatistics({ endDate: value });
+        }
       }
     });
   });
@@ -505,8 +519,11 @@ const addProductItemRow = (container, item = {}) => {
   const row = document.createElement("div");
   row.className = "item-row";
   const productSelect = createSelect(state.pools.products, item.product || "", true);
+  productSelect.classList.add("product");
   const sizeSelect = createSelect(state.pools.sizes, item.size || "", true);
+  sizeSelect.classList.add("size");
   const colorSelect = createSelect(state.pools.colors, item.color || "", true);
+  colorSelect.classList.add("color");
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "icon-btn danger remove-item";
@@ -515,22 +532,13 @@ const addProductItemRow = (container, item = {}) => {
     row.remove();
   });
   row.append(productSelect, sizeSelect, colorSelect, removeButton);
-  const addButton = container.querySelector(".add-item");
-  if (addButton) {
-    container.insertBefore(row, addButton);
-    return;
-  }
   container.appendChild(row);
 };
 
 const renderProductItems = (container, items = []) => {
   if (!container) return;
-  const addButton = container.querySelector(".add-item");
   container.innerHTML = "";
   items.forEach((item) => addProductItemRow(container, item));
-  if (addButton) {
-    container.appendChild(addButton);
-  }
 };
 
 const collectProductItems = (container) => {
@@ -739,10 +747,9 @@ const getMonthKey = (dateValue) => {
 const renderIntegrationStats = () => {
   const countEl = qs("#stats-count");
   if (!countEl) return;
-  const selectedMonth = qs("#stats-month")?.value || "";
+  const { month: selectedMonth = "", startDate = "", endDate = "" } =
+    state.statsFilters || {};
   const subfilter = qs("#stats-subfilter");
-  const startDate = qs("#stats-date-start")?.value || "";
-  const endDate = qs("#stats-date-end")?.value || "";
   const isSubfilterActive = subfilter && subfilter.classList.contains("is-open");
   const filtered = getBaseFilteredIntegrations().filter((integration) => {
     if (!canViewOverallStats && integration.agent !== profileLogin) {
@@ -802,6 +809,20 @@ const refreshIntegrationViews = () => {
   renderIntegrationList();
   renderIntegrationStats();
 };
+
+const updateStatistics = (filters) => {
+  state.statsFilters = {
+    ...state.statsFilters,
+    ...filters,
+  };
+  renderIntegrationStats();
+};
+
+const getStatsFiltersFromInputs = () => ({
+  month: qs("#stats-month")?.value || "",
+  startDate: qs("#stats-date-start")?.value || "",
+  endDate: qs("#stats-date-end")?.value || "",
+});
 
 const exportIntegrations = () => {
   const headers = [
@@ -979,9 +1000,6 @@ const openIntegrationModal = () => {
   }
   const productList = qs("#integration-products-list");
   renderProductItems(productList, []);
-  if (productList && !productList.querySelector(".item-row")) {
-    addProductItemRow(productList, {});
-  }
   qs("#blogger-dropdown")?.classList.remove("is-open");
   openModal("integration-modal");
   renderBloggerPicker();
@@ -1047,11 +1065,10 @@ const openIntegrationDetail = (integrationId) => {
       <div class="extra-products-header">
         <span>Изделия (основное и доп.)</span>
       </div>
-      <div class="items-list" id="integration-products-detail-list">
-        <button class="ghost small add-item" type="button" id="add-product-item-detail">
-          + Добавить изделие
-        </button>
-      </div>
+      <div class="items-list" id="integration-products-detail-list"></div>
+      <button class="ghost small add-item" type="button" id="add-product-item-detail">
+        + Добавить изделие
+      </button>
     </div>
     <label class="full">
       Комментарий
@@ -1067,10 +1084,6 @@ const openIntegrationDetail = (integrationId) => {
     </label>
   `;
   renderProductItems(qs("#integration-products-detail-list"), integration.items || []);
-  const detailList = qs("#integration-products-detail-list");
-  if (detailList && !detailList.querySelector(".item-row")) {
-    addProductItemRow(detailList, {});
-  }
   qs("#add-product-item-detail")?.addEventListener("click", () => {
     addProductItemRow(qs("#integration-products-detail-list"), {});
   });
@@ -1246,6 +1259,8 @@ const initIntegrationsPage = () => {
   const monthInput = qs("#stats-month");
   const dateStart = qs("#stats-date-start");
   const dateEnd = qs("#stats-date-end");
+  const dateStartDisplay = qs("#stats-date-start-display");
+  const dateEndDisplay = qs("#stats-date-end-display");
   const subfilter = qs("#stats-subfilter");
   const toggleSubfilter = qs("#toggle-stats-subfilter");
   setDefaultDateFields();
@@ -1259,13 +1274,20 @@ const initIntegrationsPage = () => {
     if (!isOpen && monthInput && dateStart && dateEnd) {
       if (!dateStart.value && monthInput.value) {
         dateStart.value = `${monthInput.value}-01`;
+        if (dateStartDisplay) {
+          dateStartDisplay.value = formatDateDisplay(dateStart.value);
+        }
       }
       if (!dateEnd.value && monthInput.value) {
         dateEnd.value = `${monthInput.value}-31`;
+        if (dateEndDisplay) {
+          dateEndDisplay.value = formatDateDisplay(dateEnd.value);
+        }
       }
     }
+    updateStatistics(getStatsFiltersFromInputs());
   });
-  renderIntegrationStats();
+  updateStatistics(getStatsFiltersFromInputs());
 
   qs("#open-integration-modal")?.addEventListener("click", openIntegrationModal);
   qs("#save-integration")?.addEventListener("click", saveIntegration);
