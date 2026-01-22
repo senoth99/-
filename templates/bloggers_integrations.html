@@ -84,44 +84,42 @@
               >
                 <span class="stats-toggle-icon" aria-hidden="true">▾</span>
               </button>
-            </div>
-          </div>
-          <div class="stats-subfilter-row">
-            <div class="stats-subfilter" id="stats-subfilter">
-              <label class="stats-control datepicker-field">
-                <span>С</span>
-                <input
-                  type="text"
-                  id="stats-date-start-display"
-                  placeholder="дд.мм.гг"
-                  readonly
-                />
-                <input type="hidden" id="stats-date-start" />
-                <div
-                  class="datepicker-panel"
-                  id="stats-date-start-picker"
-                  data-picker="date"
-                  data-target="stats-date-start"
-                  data-display="stats-date-start-display"
-                ></div>
-              </label>
-              <label class="stats-control datepicker-field">
-                <span>По</span>
-                <input
-                  type="text"
-                  id="stats-date-end-display"
-                  placeholder="дд.мм.гг"
-                  readonly
-                />
-                <input type="hidden" id="stats-date-end" />
-                <div
-                  class="datepicker-panel"
-                  id="stats-date-end-picker"
-                  data-picker="date"
-                  data-target="stats-date-end"
-                  data-display="stats-date-end-display"
-                ></div>
-              </label>
+              <div class="stats-subfilter date-range-panel" id="stats-subfilter">
+                <label class="stats-control datepicker-field">
+                  <span>С</span>
+                  <input
+                    type="text"
+                    id="stats-date-start-display"
+                    placeholder="дд.мм.гг"
+                    readonly
+                  />
+                  <input type="hidden" id="stats-date-start" />
+                  <div
+                    class="datepicker-panel"
+                    id="stats-date-start-picker"
+                    data-picker="date"
+                    data-target="stats-date-start"
+                    data-display="stats-date-start-display"
+                  ></div>
+                </label>
+                <label class="stats-control datepicker-field">
+                  <span>По</span>
+                  <input
+                    type="text"
+                    id="stats-date-end-display"
+                    placeholder="дд.мм.гг"
+                    readonly
+                  />
+                  <input type="hidden" id="stats-date-end" />
+                  <div
+                    class="datepicker-panel"
+                    id="stats-date-end-picker"
+                    data-picker="date"
+                    data-target="stats-date-end"
+                    data-display="stats-date-end-display"
+                  ></div>
+                </label>
+              </div>
             </div>
           </div>
           <div class="stats-grid">
@@ -229,19 +227,18 @@
     </div>
 
     <div class="modal hidden" id="integration-modal">
-      <div class="modal-card wide">
-        <div class="modal-header">
+      <div class="modal-card wide popup-card">
+        <div class="modal-header popup-header">
           <div>
             <h3 id="integration-modal-title">Добавление интеграции</h3>
             <p class="modal-subtitle">
               Обязательные поля отмечены красной звёздочкой.
             </p>
           </div>
-        </div>
-        <div class="modal-close-row">
           <button class="icon-btn" data-close-modal="integration-modal">✕</button>
         </div>
-        <div class="form-grid">
+        <div class="popup-body">
+          <div class="form-grid">
           <div class="full blogger-dropdown" id="blogger-dropdown">
             <label>
               Выбор блогера<span class="required">*</span>
@@ -311,10 +308,11 @@
             <div class="extra-products-header">
               <span>Изделия (основное и доп.)</span>
             </div>
-            <div class="items-list" id="integration-products-list"></div>
-            <button class="ghost small add-item" type="button" id="add-product-item">
-              + Добавить изделие
-            </button>
+            <div class="items-list" id="integration-products-list">
+              <button class="ghost small add-item" type="button" id="add-product-item">
+                + Добавить изделие
+              </button>
+            </div>
           </div>
           <label class="full">
             Комментарий
@@ -336,28 +334,29 @@
             <input type="text" id="integration-contacts" placeholder="Контакты блогера" />
           </label>
         </div>
-        <div class="card-actions">
-          <button class="secondary" data-close-modal="integration-modal">Отмена</button>
-          <button class="primary" id="save-integration">Сохранить интеграцию</button>
+          <div class="card-actions">
+            <button class="secondary" data-close-modal="integration-modal">Отмена</button>
+            <button class="primary" id="save-integration">Сохранить интеграцию</button>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="modal hidden" id="integration-detail-modal">
-      <div class="modal-card wide scrollable-header">
-        <div class="modal-header">
+      <div class="modal-card wide popup-card">
+        <div class="modal-header popup-header">
           <div>
             <h3 id="integration-detail-title">Интеграция</h3>
             <p class="modal-subtitle">Карточка интеграции с возможностью редактирования.</p>
           </div>
-        </div>
-        <div class="modal-close-row">
           <button class="icon-btn" data-close-modal="integration-detail-modal">✕</button>
         </div>
-        <div class="form-grid" id="integration-detail-fields"></div>
-        <div class="card-actions">
-          <button class="secondary" data-close-modal="integration-detail-modal">Закрыть</button>
-          <button class="primary" id="save-integration-detail">Сохранить изменения</button>
+        <div class="popup-body">
+          <div class="form-grid" id="integration-detail-fields"></div>
+          <div class="card-actions">
+            <button class="secondary" data-close-modal="integration-detail-modal">Закрыть</button>
+            <button class="primary" id="save-integration-detail">Сохранить изменения</button>
+          </div>
         </div>
       </div>
     </div>
