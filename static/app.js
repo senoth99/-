@@ -24,40 +24,6 @@ const formatDate = (value) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ru-RU");
 };
 
-const formatCurrency = (value) => {
-  if (value === null || value === undefined || value === "") return null;
-  const number = Number(value);
-  if (Number.isNaN(number)) return String(value);
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(number);
-};
-
-const formatPerson = (person) => {
-  if (!person) return null;
-  const parts = [person.name, person.company, person.phone]
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
-  return parts.length ? parts.join(" · ") : null;
-};
-
-const resolveAddress = (location, detail) => {
-  const detailAddress =
-    detail?.address?.address ||
-    detail?.address?.full_address ||
-    detail?.address_full ||
-    detail?.address_string ||
-    detail?.address;
-  if (typeof detailAddress === "string" && detailAddress.trim()) {
-    return detailAddress.trim();
-  }
-  const locationAddress =
-    location?.address || location?.address_full || location?.address_string;
-  const parts = [location?.city, locationAddress].filter(Boolean);
-  return parts.length ? parts.join(", ") : null;
-};
 
 const statusIconMap = {
   DELIVERED: "📦",
@@ -79,6 +45,7 @@ const statusIconMap = {
   CREATED: "📝",
   PENDING_REGISTRATION: "⏳",
   UNKNOWN: "❔",
+  MANUAL: "📝",
 };
 
 const resolveStatusIcon = (shipment) => {
@@ -248,25 +215,6 @@ function renderShipments() {
     card.dataset.shipment = shipment.id;
     const actionButtons = isAdmin
       ? `
-        <button class="icon-btn success" data-refresh="${shipment.id}" aria-label="Обновить">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M20 12a8 8 0 1 1-2.34-5.66"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
-            <path
-              d="M20 6v6h-6"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
         <button class="icon-btn danger" data-delete="${shipment.id}" aria-label="Удалить">×</button>
       `
       : "";
@@ -334,7 +282,6 @@ async function openShipmentDetails(shipmentId) {
   state.currentShipmentId = shipmentId;
   const title = qs("shipment-detail-title");
   const route = qs("shipment-detail-route");
-  const refreshBtn = qs("shipment-detail-refresh");
   const deleteBtn = qs("shipment-detail-delete");
   const cdekLink = qs("shipment-cdek-link");
   const mainContainer = qs("shipment-detail-main");
@@ -344,112 +291,29 @@ async function openShipmentDetails(shipmentId) {
 
   title.textContent = `Поставка ${trackNumber || shipment.id}`;
   route.textContent = `${shipment.origin_label} → ${shipment.destination_label}`;
-  refreshBtn.dataset.refresh = shipment.id;
   deleteBtn.dataset.delete = shipment.id;
   cdekLink.href = trackNumber
     ? `https://www.cdek.ru/ru/tracking?order_id=${encodeURIComponent(trackNumber)}`
     : "https://www.cdek.ru/ru/tracking";
 
   mainContainer.innerHTML =
-    "<div class='detail-item'><span class='detail-label'>Загрузка...</span></div>";
+    "<div class='detail-item'><span class='detail-label'>Данные по поставке</span></div>";
   extraContainer.innerHTML =
-    "<div class='detail-item'><span class='detail-label'>Загрузка...</span></div>";
+    "<div class='detail-item'><span class='detail-label'>Дополнительные данные</span></div>";
   statusesContainer.innerHTML =
-    "<div class='status-item'>Загрузка статусов...</div>";
+    "<div class='status-item'>История статусов недоступна.</div>";
   openModal("shipment-details-modal");
 
-  if (!trackNumber) {
-    renderDetailItems(mainContainer, [
-      { label: "Статус", value: shipment.last_status || "Нет данных" },
-      { label: "Последнее обновление", value: formatDate(shipment.last_update) },
-      { label: "Локация", value: shipment.last_location || "Локация неизвестна" },
-    ]);
-    renderDetailItems(extraContainer, [
-      { label: "Получатель", value: "Нет трек-номера" },
-    ]);
-    renderStatusHistory(statusesContainer, []);
-    return;
-  }
-
-  try {
-    const tracking = await api("/api/track", {
-      method: "POST",
-      body: JSON.stringify({ track_number: trackNumber }),
-    });
-    const order = tracking.order || {};
-    const recipient = order.recipient || {};
-    const sender = order.sender || {};
-    const deliveryDetail = order.delivery_detail || {};
-    const fromLocation = order.from_location || {};
-    const toLocation = order.to_location || {};
-    const deliveryPoint = deliveryDetail.delivery_point || deliveryDetail.point;
-
-    renderDetailItems(mainContainer, [
-      {
-        label: "Статус",
-        value:
-          tracking.status?.name ||
-          tracking.status?.code ||
-          shipment.last_status ||
-          "Нет данных",
-      },
-      {
-        label: "Последнее обновление",
-        value: formatDate(tracking.status?.date_time || shipment.last_update),
-      },
-      {
-        label: "Текущая локация",
-        value:
-          tracking.status?.city || shipment.last_location || "Локация неизвестна",
-      },
-      {
-        label: "Откуда",
-        value: fromLocation.city || shipment.origin_label,
-      },
-      {
-        label: "Куда",
-        value: toLocation.city || shipment.destination_label,
-      },
-      {
-        label: "Адрес отправки",
-        value: resolveAddress(fromLocation) || shipment.origin_label,
-      },
-      {
-        label: "Адрес доставки",
-        value: resolveAddress(toLocation, deliveryDetail) || shipment.destination_label,
-      },
-      {
-        label: "Пункт выдачи",
-        value: deliveryPoint ? `ПВЗ ${deliveryPoint}` : null,
-      },
-    ]);
-
-    renderDetailItems(extraContainer, [
-      { label: "Получатель", value: formatPerson(recipient) || recipient.name },
-      { label: "Email получателя", value: recipient.email },
-      { label: "Отправитель", value: formatPerson(sender) || sender.name },
-      {
-        label: "Стоимость доставки",
-        value: formatCurrency(order.delivery_sum),
-      },
-      { label: "Стоимость заказа", value: formatCurrency(order.total_sum) },
-      {
-        label: "Плановая доставка",
-        value: formatDate(order.planned_delivery_date),
-      },
-      { label: "Комментарий", value: order.comment },
-    ]);
-
-    renderStatusHistory(statusesContainer, tracking.statuses);
-  } catch (err) {
-    renderDetailItems(mainContainer, [
-      { label: "Ошибка", value: err.message },
-    ]);
-    renderDetailItems(extraContainer, [
-      { label: "Получатель", value: "Нет данных" },
-    ]);
-    renderStatusHistory(statusesContainer, []);
-  }
+  renderDetailItems(mainContainer, [
+    { label: "Статус", value: shipment.last_status || "Нет данных" },
+    { label: "Последнее обновление", value: formatDate(shipment.last_update) },
+    { label: "Локация", value: shipment.last_location || "Локация неизвестна" },
+    { label: "Трек-номер", value: trackNumber || "Не задан" },
+  ]);
+  renderDetailItems(extraContainer, [
+    { label: "Источник", value: "Отслеживание CDEK отключено" },
+  ]);
+  renderStatusHistory(statusesContainer, []);
 }
 
 async function handleAddLocation() {
@@ -604,19 +468,6 @@ async function exportExcel() {
   showNotification("Экспорт Excel начался.", "info");
 }
 
-async function refreshShipment(shipmentId) {
-  try {
-    await api(`/api/shipments/${shipmentId}/refresh`, { method: "POST" });
-    await loadShipments();
-    if (state.currentShipmentId === shipmentId) {
-      await openShipmentDetails(shipmentId);
-    }
-    showNotification("Статус поставки обновлен.", "success");
-  } catch (err) {
-    showNotification(err.message, "error");
-  }
-}
-
 async function deleteShipment(shipmentId) {
   try {
     await api(`/api/shipments/${shipmentId}`, { method: "DELETE" });
@@ -662,7 +513,7 @@ function registerEvents() {
   document.addEventListener("click", (event) => {
     const target = event.target;
     const actionTarget = target.closest(
-      "[data-close],[data-upload],[data-records],[data-refresh],[data-delete],[data-delete-location],[data-shipment]",
+      "[data-close],[data-upload],[data-records],[data-delete],[data-delete-location],[data-shipment]",
     );
     if (!actionTarget) {
       return;
@@ -682,10 +533,6 @@ function registerEvents() {
     }
     if (actionTarget.dataset.records) {
       openRecords(Number(actionTarget.dataset.records));
-    }
-    if (actionTarget.dataset.refresh) {
-      if (!isAdmin) return;
-      refreshShipment(Number(actionTarget.dataset.refresh));
     }
     if (actionTarget.dataset.delete) {
       if (!isAdmin) return;

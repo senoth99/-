@@ -6,7 +6,6 @@
     <title>CASHER CRM — Интеграции</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
-    <script src="/static/theme.js" defer></script>
   </head>
   <body
     class="crm-body bloggers-page"
@@ -45,6 +44,48 @@
             <div class="section-actions">
               <button class="primary" id="open-integration-modal">Добавить интеграцию</button>
             </div>
+          </div>
+        </section>
+
+        <section class="bloggers-section" id="integrations-stats">
+          <div class="section-head">
+            <div>
+              <h3>Статистика по интеграциям</h3>
+              <p class="subtitle">
+                Данные формируются с учётом фильтров и выбранного периода.
+              </p>
+            </div>
+            <div class="section-actions stats-controls">
+              <label class="stats-control">
+                <span>С</span>
+                <input type="month" id="stats-month-start" />
+              </label>
+              <label class="stats-control">
+                <span>По</span>
+                <input type="month" id="stats-month-end" />
+              </label>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-label">Интеграций</span>
+              <span class="stat-value" id="stats-count">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Суммарный CPM</span>
+              <span class="stat-value" id="stats-cpm">—</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Бюджет</span>
+              <span class="stat-value" id="stats-budget">—</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Охваты</span>
+              <span class="stat-value" id="stats-reach">—</span>
+            </div>
+          </div>
+          <div class="stats-highlight" id="stats-best-manager">
+            Лучший менеджер: —
           </div>
         </section>
 
@@ -137,9 +178,10 @@
               id="integration-blogger"
               placeholder="Выберите блогера из базы"
               readonly
+              class="picker-trigger"
             />
           </label>
-          <div class="picker-panel full" id="blogger-picker">
+          <div class="picker-panel full hidden" id="blogger-picker">
             <div class="picker-header">
               <input
                 type="text"
@@ -170,6 +212,16 @@
             <select id="integration-format"></select>
           </label>
           <label>
+            Охваты
+            <input
+              type="number"
+              id="integration-reach"
+              placeholder="Например, 120000"
+              min="0"
+              step="1"
+            />
+          </label>
+          <label>
             Бюджет
             <input type="text" id="integration-budget" placeholder="Например, 25 000" />
           </label>
@@ -192,18 +244,13 @@
             Цвет
             <select id="integration-color"></select>
           </label>
-          <label>
-            Доп. изделие
-            <select id="integration-extra-product"></select>
-          </label>
-          <label>
-            Размер (доп.)
-            <select id="integration-extra-size"></select>
-          </label>
-          <label>
-            Цвет (доп.)
-            <select id="integration-extra-color"></select>
-          </label>
+          <div class="full extra-products" id="extra-products">
+            <div class="extra-products-header">
+              <span>Доп. изделия (до 5 шт)</span>
+              <button class="ghost small" type="button" id="add-extra-product">+</button>
+            </div>
+            <div class="extra-products-list" id="extra-products-list"></div>
+          </div>
           <label class="full">
             Комментарий
             <input
