@@ -466,9 +466,13 @@ const closeModal = (id) => {
 
 const updateSelect = (select, options) => {
   if (!select) return;
-  select.innerHTML = options
-    .map((option) => `<option value="${option}">${option}</option>`)
-    .join("");
+  select.innerHTML = "";
+  options.forEach((option) => {
+    const optionEl = document.createElement("option");
+    optionEl.value = option;
+    optionEl.textContent = option;
+    select.appendChild(optionEl);
+  });
 };
 
 const updatePoolFilters = () => {
@@ -506,13 +510,15 @@ const normalizeProductItem = (item) => {
 const createSelect = (options, value, placeholder) => {
   const select = document.createElement("select");
   const items = ["", ...options];
-  select.innerHTML = items
-    .map((option) => {
-      const label = option || placeholder || "Выберите";
-      const selected = option === value ? "selected" : "";
-      return `<option value="${option}" ${selected}>${label}</option>`;
-    })
-    .join("");
+  items.forEach((option) => {
+    const optionEl = document.createElement("option");
+    optionEl.value = option;
+    optionEl.textContent = option || placeholder || "Выберите";
+    if (option === value) {
+      optionEl.selected = true;
+    }
+    select.appendChild(optionEl);
+  });
   return select;
 };
 
