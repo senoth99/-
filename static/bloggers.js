@@ -104,6 +104,8 @@ const state = {
     startDate: "",
     endDate: "",
   },
+  integrationFormItems: [],
+  integrationDetailItems: [],
 };
 
 let selectedBloggerId = null;
@@ -261,7 +263,7 @@ const setStatsDateDefaults = () => {
   if (endInput && !endInput.value) endInput.value = today;
   if (startDisplay) startDisplay.value = formatDateDisplay(startInput?.value || "");
   if (endDisplay) endDisplay.value = formatDateDisplay(endInput?.value || "");
-  updateStatistics({
+  setStatsFilters({
     month: monthInput?.value || "",
     startDate: startInput?.value || "",
     endDate: endInput?.value || "",
@@ -398,7 +400,7 @@ const initStatsDatePickers = () => {
         targetInput.value = value;
         displayInput.value = formatMonthDisplay(value);
         panel.classList.remove("is-open");
-        updateStatistics(getStatsFiltersFromInputs());
+        setStatsFilters(getStatsFiltersFromInputs());
       }
 
       const dayButton = event.target.closest("[data-day]");
@@ -410,7 +412,7 @@ const initStatsDatePickers = () => {
         targetInput.value = value;
         displayInput.value = formatDateDisplay(value);
         panel.classList.remove("is-open");
-        updateStatistics(getStatsFiltersFromInputs());
+        setStatsFilters(getStatsFiltersFromInputs());
       }
     });
   });
@@ -510,7 +512,7 @@ const createSelect = (options, value, allowEmpty = false) => {
   return select;
 };
 
-const addProductItemRow = (container, item = {}) => {
+const addProductItemRow = (container, item = {}, index, items, onItemsChange) => {
   if (!container) return;
   const row = document.createElement("div");
   row.className = "item-row";
@@ -525,31 +527,55 @@ const addProductItemRow = (container, item = {}) => {
   removeButton.className = "icon-btn danger remove-item";
   removeButton.textContent = "×";
   removeButton.addEventListener("click", () => {
-    row.remove();
+    if (!onItemsChange) {
+      row.remove();
+      return;
+    }
+    const nextItems = items.filter((_, idx) => idx !== index);
+    onItemsChange(nextItems);
+  });
+  [productSelect, sizeSelect, colorSelect].forEach((select) => {
+    select.addEventListener("change", () => {
+      if (!onItemsChange) return;
+      const nextItems = items.map((current, idx) => {
+        if (idx !== index) return current;
+        return {
+          product: productSelect.value,
+          size: sizeSelect.value,
+          color: colorSelect.value,
+        };
+      });
+      onItemsChange(nextItems);
+    });
   });
   row.append(productSelect, sizeSelect, colorSelect, removeButton);
   container.appendChild(row);
 };
 
-const renderProductItems = (container, items = []) => {
+const renderProductItems = (container, items = [], onItemsChange) => {
   if (!container) return;
   container.innerHTML = "";
-  items.forEach((item) => addProductItemRow(container, item));
+  items.forEach((item, index) => {
+    addProductItemRow(container, item, index, items, onItemsChange);
+  });
 };
 
-const collectProductItems = (container) => {
-  if (!container) return [];
-  const items = Array.from(container.querySelectorAll(".item-row")).map(
-    (row) => {
-      const selects = row.querySelectorAll("select");
-      return {
-        product: selects[0]?.value || "",
-        size: selects[1]?.value || "",
-        color: selects[2]?.value || "",
-      };
-    }
-  );
-  return items.filter((item) => item.product || item.size || item.color);
+const normalizeProductItems = (items = []) =>
+  items.map((item) => ({
+    product: item?.product || "",
+    size: item?.size || "",
+    color: item?.color || "",
+  }));
+
+const getValidProductItems = (items = []) =>
+  items.filter((item) => item.product || item.size || item.color);
+
+const updateIntegrationItems = (stateKey, container, items) => {
+  if (!container) return;
+  state[stateKey] = normalizeProductItems(items);
+  renderProductItems(container, state[stateKey], (nextItems) => {
+    updateIntegrationItems(stateKey, container, nextItems);
+  });
 };
 
 const formatProductItems = (items = []) =>
@@ -806,13 +832,18 @@ const refreshIntegrationViews = () => {
   renderIntegrationStats();
 };
 
-const updateStatistics = (filters) => {
-  state.statsFilters = {
-    ...state.statsFilters,
-    ...filters,
-  };
+function updateStatistics(filters) {
+  state.statsFilters = { ...filters };
   renderIntegrationStats();
-};
+}
+
+function setStatsFilters(nextFilters) {
+  const merged = {
+    ...state.statsFilters,
+    ...nextFilters,
+  };
+  updateStatistics(merged);
+}
 
 const getStatsFiltersFromInputs = () => ({
   month: qs("#stats-month")?.value || "",
@@ -995,7 +1026,8 @@ const openIntegrationModal = () => {
     date.value = getTodayValue();
   }
   const productList = qs("#integration-products-list");
-  renderProductItems(productList, []);
+  state.integrationFormItems = [];
+  updateIntegrationItems("integrationFormItems", productList, state.integrationFormItems);
   qs("#blogger-dropdown")?.classList.remove("is-open");
   openModal("integration-modal");
   renderBloggerPicker();
@@ -1013,7 +1045,7 @@ const saveIntegration = () => {
     reach: qs("#integration-reach")?.value.trim() || "",
     budget: qs("#integration-budget")?.value.trim() || "",
     ugcStatus: qs("#integration-ugc")?.value || "",
-    items: collectProductItems(qs("#integration-products-list")),
+    items: getValidProductItems(state.integrationFormItems),
     comment: qs("#integration-comment")?.value.trim() || "",
     track: qs("#integration-track")?.value.trim() || "",
     contacts: qs("#integration-contacts")?.value.trim() || "",
@@ -1076,10 +1108,22 @@ const openIntegrationDetail = (integrationId) => {
       <input type="text" id="integration-detail-contacts" value="${integration.contacts || ""}" />
     </label>
   `;
-  renderProductItems(qs("#integration-products-detail-list"), integration.items || []);
-  qs("#add-product-item-detail")?.addEventListener("click", () => {
-    addProductItemRow(qs("#integration-products-detail-list"), {});
-  });
+  const detailList = qs("#integration-products-detail-list");
+  state.integrationDetailItems = normalizeProductItems(integration.items || []);
+  updateIntegrationItems(
+    "integrationDetailItems",
+    detailList,
+    state.integrationDetailItems
+  );
+  const addDetailButton = qs("#add-product-item-detail");
+  if (addDetailButton) {
+    addDetailButton.onclick = () => {
+      updateIntegrationItems("integrationDetailItems", detailList, [
+        ...state.integrationDetailItems,
+        {},
+      ]);
+    };
+  }
   openModal("integration-detail-modal");
 };
 
@@ -1094,7 +1138,7 @@ const saveIntegrationDetail = () => {
   integration.reach = qs("#integration-detail-reach")?.value.trim() || integration.reach;
   integration.budget = qs("#integration-detail-budget")?.value.trim() || integration.budget;
   integration.ugcStatus = qs("#integration-detail-ugc")?.value.trim() || integration.ugcStatus;
-  integration.items = collectProductItems(qs("#integration-products-detail-list"));
+  integration.items = getValidProductItems(state.integrationDetailItems);
   integration.comment =
     qs("#integration-detail-comment")?.value.trim() || integration.comment;
   integration.track = qs("#integration-detail-track")?.value.trim() || integration.track;
@@ -1256,6 +1300,9 @@ const initIntegrationsPage = () => {
   const dateEndDisplay = qs("#stats-date-end-display");
   const subfilter = qs("#stats-subfilter");
   const toggleSubfilter = qs("#toggle-stats-subfilter");
+  const handleStatsFilterUpdate = () => {
+    setStatsFilters(getStatsFiltersFromInputs());
+  };
   setDefaultDateFields();
   setStatsDateDefaults();
   initStatsDatePickers();
@@ -1278,9 +1325,12 @@ const initIntegrationsPage = () => {
         }
       }
     }
-    updateStatistics(getStatsFiltersFromInputs());
+    handleStatsFilterUpdate();
   });
-  updateStatistics(getStatsFiltersFromInputs());
+  [monthInput, dateStart, dateEnd].forEach((input) => {
+    input?.addEventListener("change", handleStatsFilterUpdate);
+  });
+  setStatsFilters(getStatsFiltersFromInputs());
 
   qs("#open-integration-modal")?.addEventListener("click", openIntegrationModal);
   qs("#save-integration")?.addEventListener("click", saveIntegration);
@@ -1347,7 +1397,11 @@ const initIntegrationsPage = () => {
   });
 
   qs("#add-product-item")?.addEventListener("click", () => {
-    addProductItemRow(qs("#integration-products-list"), {});
+    const productList = qs("#integration-products-list");
+    updateIntegrationItems("integrationFormItems", productList, [
+      ...state.integrationFormItems,
+      {},
+    ]);
   });
 
   [
