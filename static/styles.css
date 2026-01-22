@@ -451,6 +451,14 @@ body[data-role="employee"] .admin-only {
   flex-direction: column;
   max-height: 90vh;
   overflow: hidden;
+  padding: 0;
+  gap: 0;
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
 }
 
 .modal-header {
@@ -473,10 +481,8 @@ body[data-role="employee"] .admin-only {
 }
 
 .popup-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   background: inherit;
+  padding: 24px 24px 0;
 }
 
 .popup-body {
@@ -486,6 +492,7 @@ body[data-role="employee"] .admin-only {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  padding: 16px 24px 24px;
 }
 
 .icon-btn {
@@ -2036,6 +2043,7 @@ td {
   align-items: center;
   gap: 12px;
   position: relative;
+  overflow: visible;
 }
 
 .stats-control {
@@ -2087,7 +2095,7 @@ td {
   transform: translateY(-6px);
   overflow: hidden;
   transition: max-height 250ms ease, opacity 250ms ease, transform 250ms ease;
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 20;
 }
 
