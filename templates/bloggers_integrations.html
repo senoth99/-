@@ -49,17 +49,30 @@
         </section>
 
         <section class="bloggers-section" id="integrations-stats">
-          <div class="section-head">
+          <div class="section-head stats-head">
             <div>
               <h3>Статистика по интеграциям</h3>
               <p class="subtitle">
                 Данные формируются с учётом фильтров и выбранного периода.
               </p>
             </div>
-            <div class="section-actions stats-controls">
-              <label class="stats-control stats-control--month">
+            <div class="stats-controls-main">
+              <label class="stats-control stats-control--month datepicker-field">
                 <span>Месяц</span>
-                <input type="month" id="stats-month" />
+                <input
+                  type="text"
+                  id="stats-month-display"
+                  placeholder="мм.гг"
+                  readonly
+                />
+                <input type="hidden" id="stats-month" />
+                <div
+                  class="datepicker-panel"
+                  id="stats-month-picker"
+                  data-picker="month"
+                  data-target="stats-month"
+                  data-display="stats-month-display"
+                ></div>
               </label>
               <button
                 class="icon-btn stats-toggle"
@@ -69,18 +82,46 @@
                 aria-controls="stats-subfilter"
                 title="Развернуть фильтр по датам"
               >
-                ⤢
+                <span class="stats-toggle-icon" aria-hidden="true">▾</span>
               </button>
-              <div class="stats-subfilter hidden" id="stats-subfilter">
-                <label class="stats-control">
-                  <span>С</span>
-                  <input type="date" id="stats-date-start" />
-                </label>
-                <label class="stats-control">
-                  <span>По</span>
-                  <input type="date" id="stats-date-end" />
-                </label>
-              </div>
+            </div>
+          </div>
+          <div class="stats-subfilter-row">
+            <div class="stats-subfilter" id="stats-subfilter">
+              <label class="stats-control datepicker-field">
+                <span>С</span>
+                <input
+                  type="text"
+                  id="stats-date-start-display"
+                  placeholder="дд.мм.гг"
+                  readonly
+                />
+                <input type="hidden" id="stats-date-start" />
+                <div
+                  class="datepicker-panel"
+                  id="stats-date-start-picker"
+                  data-picker="date"
+                  data-target="stats-date-start"
+                  data-display="stats-date-start-display"
+                ></div>
+              </label>
+              <label class="stats-control datepicker-field">
+                <span>По</span>
+                <input
+                  type="text"
+                  id="stats-date-end-display"
+                  placeholder="дд.мм.гг"
+                  readonly
+                />
+                <input type="hidden" id="stats-date-end" />
+                <div
+                  class="datepicker-panel"
+                  id="stats-date-end-picker"
+                  data-picker="date"
+                  data-target="stats-date-end"
+                  data-display="stats-date-end-display"
+                ></div>
+              </label>
             </div>
           </div>
           <div class="stats-grid">
@@ -175,7 +216,12 @@
               <option value="Бартер">Бартер</option>
               <option value="КМ">КМ</option>
             </select>
-            <input type="date" id="integration-date-filter" />
+            <input
+              type="date"
+              id="integration-date-filter"
+              lang="ru"
+              placeholder="дд.мм.гг"
+            />
           </div>
           <div class="list-grid is-list" id="integration-list"></div>
         </section>
@@ -196,26 +242,30 @@
           <button class="icon-btn" data-close-modal="integration-modal">✕</button>
         </div>
         <div class="form-grid">
-          <label class="full">
-            Выбор блогера<span class="required">*</span>
-            <input
-              type="text"
-              id="integration-blogger"
-              placeholder="Выберите блогера из базы"
-              readonly
-              class="picker-trigger"
-            />
-          </label>
-          <div class="picker-panel full hidden" id="blogger-picker">
-            <div class="picker-header">
+          <div class="full blogger-dropdown" id="blogger-dropdown">
+            <label>
+              Выбор блогера<span class="required">*</span>
               <input
                 type="text"
-                id="blogger-picker-search"
-                placeholder="Поиск по имени, ссылке или тегу"
+                id="integration-blogger"
+                placeholder="Выберите блогера из базы"
+                readonly
+                class="picker-trigger"
               />
-              <button class="secondary" id="open-blogger-from-picker">Добавить блогера</button>
+            </label>
+            <div class="picker-panel" id="blogger-picker">
+              <div class="picker-header">
+                <input
+                  type="text"
+                  id="blogger-picker-search"
+                  placeholder="Поиск по имени, ссылке или тегу"
+                />
+                <button class="secondary" id="open-blogger-from-picker">
+                  Добавить блогера
+                </button>
+              </div>
+              <div class="picker-list" id="blogger-picker-list"></div>
             </div>
-            <div class="picker-list" id="blogger-picker-list"></div>
           </div>
           <label>
             Агент
@@ -223,7 +273,7 @@
           </label>
           <label>
             Дата интеграции
-            <input type="date" id="integration-date" />
+            <input type="date" id="integration-date" lang="ru" placeholder="дд.мм.гг" />
           </label>
           <label>
             Условия сотрудничества
@@ -257,24 +307,14 @@
               <option value="Не сдан">Не сдан</option>
             </select>
           </label>
-          <label>
-            Изделие
-            <select id="integration-product"></select>
-          </label>
-          <label>
-            Размер
-            <select id="integration-size"></select>
-          </label>
-          <label>
-            Цвет
-            <select id="integration-color"></select>
-          </label>
-          <div class="full extra-products" id="extra-products">
+          <div class="full items-block" id="integration-products">
             <div class="extra-products-header">
-              <span>Доп. изделия (до 5 шт)</span>
-              <button class="ghost small" type="button" id="add-extra-product">+</button>
+              <span>Изделия (основное и доп.)</span>
             </div>
-            <div class="extra-products-list" id="extra-products-list"></div>
+            <div class="items-list" id="integration-products-list"></div>
+            <button class="ghost small add-item" type="button" id="add-product-item">
+              + Добавить изделие
+            </button>
           </div>
           <label class="full">
             Комментарий

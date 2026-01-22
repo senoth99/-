@@ -61,10 +61,12 @@ const state = {
       reach: "120000",
       budget: "0",
       ugcStatus: "Сдан",
-      product: 'Джерси "Light Classic"',
-      size: "M",
-      color: "Белый",
-      extraItems: [
+      items: [
+        {
+          product: 'Джерси "Light Classic"',
+          size: "M",
+          color: "Белый",
+        },
         {
           product: 'Джерси "Light Classic"',
           size: "S",
@@ -85,10 +87,13 @@ const state = {
       reach: "80000",
       budget: "45000",
       ugcStatus: "Не сдан",
-      product: 'Джерси "Light Classic"',
-      size: "L",
-      color: "Черный",
-      extraItems: [],
+      items: [
+        {
+          product: 'Джерси "Light Classic"',
+          size: "L",
+          color: "Черный",
+        },
+      ],
       comment: "Обсуждается повторная интеграция.",
       track: "",
       contacts: "instagram.com/gromov_life",
@@ -164,13 +169,247 @@ const formatDateLabel = (value) => {
   return new Date(year, month - 1, day).toLocaleDateString("ru-RU");
 };
 
+const monthsRu = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+const weekdaysRu = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
 const formatMonthLabel = (value) => {
   if (!value) return "—";
   const [year, month] = value.split("-").map(Number);
   if (!year || !month) return value;
-  return new Date(year, month - 1, 1).toLocaleDateString("ru-RU", {
-    month: "long",
-    year: "numeric",
+  return `${monthsRu[month - 1]} ${year}`;
+};
+
+const getTodayValue = () => new Date().toISOString().split("T")[0];
+
+const formatDateDisplay = (value) => {
+  if (!value) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return `${String(day).padStart(2, "0")}.${String(month).padStart(
+    2,
+    "0"
+  )}.${year}`;
+};
+
+const formatMonthDisplay = (value) => {
+  if (!value) return "";
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return value;
+  return `${monthsRu[month - 1]} ${year}`;
+};
+
+const getCurrentMonthValue = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const setDefaultDateFields = () => {
+  const todayValue = getTodayValue();
+  qsa('input[type="date"]').forEach((input) => {
+    if (!input.value) input.value = todayValue;
+    input.setAttribute("lang", "ru");
+    if (!input.getAttribute("placeholder")) {
+      input.setAttribute("placeholder", "дд.мм.гг");
+    }
+  });
+  const monthValue = getCurrentMonthValue();
+  qsa('input[type="month"]').forEach((input) => {
+    if (!input.value) input.value = monthValue;
+    input.setAttribute("lang", "ru");
+    if (!input.getAttribute("placeholder")) {
+      input.setAttribute("placeholder", "мм.гг");
+    }
+  });
+};
+
+const setStatsDateDefaults = () => {
+  const monthInput = qs("#stats-month");
+  const monthDisplay = qs("#stats-month-display");
+  const startInput = qs("#stats-date-start");
+  const startDisplay = qs("#stats-date-start-display");
+  const endInput = qs("#stats-date-end");
+  const endDisplay = qs("#stats-date-end-display");
+  const today = getTodayValue();
+  const currentMonth = getCurrentMonthValue();
+
+  if (monthInput && !monthInput.value) {
+    monthInput.value = currentMonth;
+  }
+  if (monthDisplay) {
+    monthDisplay.value = formatMonthDisplay(monthInput?.value || "");
+  }
+  if (startInput && !startInput.value) startInput.value = today;
+  if (endInput && !endInput.value) endInput.value = today;
+  if (startDisplay) startDisplay.value = formatDateDisplay(startInput?.value || "");
+  if (endDisplay) endDisplay.value = formatDateDisplay(endInput?.value || "");
+};
+
+const renderMonthPicker = (panel, year, selectedMonth) => {
+  if (!panel) return;
+  panel.innerHTML = `
+    <div class="datepicker-header">
+      <button type="button" class="datepicker-nav" data-dir="-1">‹</button>
+      <span>${year}</span>
+      <button type="button" class="datepicker-nav" data-dir="1">›</button>
+    </div>
+    <div class="datepicker-grid month-grid">
+      ${monthsRu
+        .map((month, index) => {
+          const isActive = index + 1 === selectedMonth;
+          return `<button type="button" class="datepicker-cell${
+            isActive ? " is-active" : ""
+          }" data-month="${index + 1}">${month}</button>`;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
+
+const renderDatePicker = (panel, year, month, selectedDay) => {
+  if (!panel) return;
+  const firstDay = new Date(year, month - 1, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = getDaysInMonth(year, month);
+  const blanks = Array.from({ length: startOffset }, () => "");
+  const days = Array.from({ length: daysInMonth }, (_, idx) => idx + 1);
+  panel.innerHTML = `
+    <div class="datepicker-header">
+      <button type="button" class="datepicker-nav" data-dir="-1">‹</button>
+      <span>${monthsRu[month - 1]} ${year}</span>
+      <button type="button" class="datepicker-nav" data-dir="1">›</button>
+    </div>
+    <div class="datepicker-weekdays">
+      ${weekdaysRu.map((day) => `<span>${day}</span>`).join("")}
+    </div>
+    <div class="datepicker-grid">
+      ${[...blanks, ...days]
+        .map((day) => {
+          if (!day) {
+            return `<span class="datepicker-blank"></span>`;
+          }
+          const isActive = day === selectedDay;
+          return `<button type="button" class="datepicker-cell${
+            isActive ? " is-active" : ""
+          }" data-day="${day}">${day}</button>`;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const initStatsDatePickers = () => {
+  const panels = qsa(".datepicker-panel");
+  if (!panels.length) return;
+
+  const closePanels = () => {
+    panels.forEach((panel) => panel.classList.remove("is-open"));
+  };
+
+  panels.forEach((panel) => {
+    const targetId = panel.dataset.target;
+    const displayId = panel.dataset.display;
+    const type = panel.dataset.picker;
+    const targetInput = targetId ? qs(`#${targetId}`) : null;
+    const displayInput = displayId ? qs(`#${displayId}`) : null;
+    if (!targetInput || !displayInput) return;
+
+    const openPanel = () => {
+      panels.forEach((item) => item.classList.remove("is-open"));
+      panel.classList.add("is-open");
+      const value = targetInput.value || (type === "month" ? getCurrentMonthValue() : getTodayValue());
+      const [year, month, day] = value.split("-").map(Number);
+      if (type === "month") {
+        panel.dataset.year = String(year);
+        renderMonthPicker(panel, year, month);
+      } else {
+        panel.dataset.year = String(year);
+        panel.dataset.month = String(month);
+        renderDatePicker(panel, year, month, day);
+      }
+    };
+
+    displayInput.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = panel.classList.contains("is-open");
+      if (isOpen) {
+        panel.classList.remove("is-open");
+        return;
+      }
+      openPanel();
+    });
+
+    panel.addEventListener("click", (event) => {
+      const nav = event.target.closest(".datepicker-nav");
+      if (nav) {
+        const dir = Number(nav.dataset.dir || 0);
+        if (type === "month") {
+          const year = Number(panel.dataset.year || getCurrentMonthValue().slice(0, 4));
+          const nextYear = year + dir;
+          panel.dataset.year = String(nextYear);
+          const currentValue = targetInput.value || `${nextYear}-01`;
+          const [, currentMonth] = currentValue.split("-").map(Number);
+          renderMonthPicker(panel, nextYear, currentMonth || 1);
+        } else {
+          const year = Number(panel.dataset.year || getTodayValue().slice(0, 4));
+          const month = Number(panel.dataset.month || getTodayValue().slice(5, 7));
+          const nextDate = new Date(year, month - 1 + dir, 1);
+          panel.dataset.year = String(nextDate.getFullYear());
+          panel.dataset.month = String(nextDate.getMonth() + 1);
+          renderDatePicker(
+            panel,
+            nextDate.getFullYear(),
+            nextDate.getMonth() + 1,
+            Number((targetInput.value || getTodayValue()).split("-")[2])
+          );
+        }
+      }
+
+      const monthButton = event.target.closest("[data-month]");
+      if (type === "month" && monthButton) {
+        const year = Number(panel.dataset.year || getCurrentMonthValue().slice(0, 4));
+        const month = Number(monthButton.dataset.month);
+        const value = `${year}-${String(month).padStart(2, "0")}`;
+        targetInput.value = value;
+        displayInput.value = formatMonthDisplay(value);
+        panel.classList.remove("is-open");
+        renderIntegrationStats();
+      }
+
+      const dayButton = event.target.closest("[data-day]");
+      if (type === "date" && dayButton) {
+        const year = Number(panel.dataset.year || getTodayValue().slice(0, 4));
+        const month = Number(panel.dataset.month || getTodayValue().slice(5, 7));
+        const day = Number(dayButton.dataset.day);
+        const value = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        targetInput.value = value;
+        displayInput.value = formatDateDisplay(value);
+        panel.classList.remove("is-open");
+        renderIntegrationStats();
+      }
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target.closest(".datepicker-panel") || target.closest('[id$="-display"]')) {
+      return;
+    }
+    closePanels();
   });
 };
 
@@ -244,52 +483,32 @@ const updatePoolFilters = () => {
 const updateFormPools = () => {
   updateSelect(qs("#blogger-niche"), state.pools.niches);
   updateSelect(qs("#integration-format"), state.pools.formats);
-  updateSelect(qs("#integration-product"), state.pools.products);
-  updateSelect(qs("#integration-color"), state.pools.colors);
-  updateSelect(qs("#integration-size"), state.pools.sizes);
   updatePoolFilters();
 };
 
-const MAX_EXTRA_ITEMS = 5;
-
-const createSelect = (options, value) => {
+const createSelect = (options, value, allowEmpty = false) => {
   const select = document.createElement("select");
-  select.innerHTML = options
-    .map(
-      (option) =>
-        `<option value="${option}" ${
-          option === value ? "selected" : ""
-        }>${option}</option>`
-    )
+  const items = allowEmpty ? ["", ...options] : options;
+  select.innerHTML = items
+    .map((option) => {
+      const label = option || "Выберите";
+      const selected = option === value ? "selected" : "";
+      return `<option value="${option}" ${selected}>${label}</option>`;
+    })
     .join("");
   return select;
 };
 
-const addExtraItemRow = (container, item = {}) => {
+const addProductItemRow = (container, item = {}) => {
   if (!container) return;
-  const emptyState = container.querySelector(".extra-products-empty");
-  if (emptyState) emptyState.remove();
-  if (container.querySelectorAll(".extra-product-row").length >= MAX_EXTRA_ITEMS) {
-    showNotification("Можно добавить не более 5 доп. изделий.", "info");
-    return;
-  }
   const row = document.createElement("div");
-  row.className = "extra-product-row";
-  const productSelect = createSelect(
-    state.pools.products,
-    item.product || state.pools.products[0]
-  );
-  const sizeSelect = createSelect(
-    state.pools.sizes,
-    item.size || state.pools.sizes[0]
-  );
-  const colorSelect = createSelect(
-    state.pools.colors,
-    item.color || state.pools.colors[0]
-  );
+  row.className = "item-row";
+  const productSelect = createSelect(state.pools.products, item.product || "", true);
+  const sizeSelect = createSelect(state.pools.sizes, item.size || "", true);
+  const colorSelect = createSelect(state.pools.colors, item.color || "", true);
   const removeButton = document.createElement("button");
   removeButton.type = "button";
-  removeButton.className = "icon-btn danger";
+  removeButton.className = "icon-btn danger remove-item";
   removeButton.textContent = "×";
   removeButton.addEventListener("click", () => {
     row.remove();
@@ -298,31 +517,28 @@ const addExtraItemRow = (container, item = {}) => {
   container.appendChild(row);
 };
 
-const renderExtraItems = (container, items = []) => {
+const renderProductItems = (container, items = []) => {
   if (!container) return;
   container.innerHTML = "";
-  items.forEach((item) => addExtraItemRow(container, item));
-  if (!items.length) {
-    const emptyState = document.createElement("div");
-    emptyState.className = "extra-products-empty";
-    emptyState.textContent = "Нажмите «+», чтобы добавить доп. изделие.";
-    container.appendChild(emptyState);
-  }
+  items.forEach((item) => addProductItemRow(container, item));
 };
 
-const collectExtraItems = (container) => {
+const collectProductItems = (container) => {
   if (!container) return [];
-  return Array.from(container.querySelectorAll(".extra-product-row")).map((row) => {
-    const selects = row.querySelectorAll("select");
-    return {
-      product: selects[0]?.value || "",
-      size: selects[1]?.value || "",
-      color: selects[2]?.value || "",
-    };
-  });
+  const items = Array.from(container.querySelectorAll(".item-row")).map(
+    (row) => {
+      const selects = row.querySelectorAll("select");
+      return {
+        product: selects[0]?.value || "",
+        size: selects[1]?.value || "",
+        color: selects[2]?.value || "",
+      };
+    }
+  );
+  return items.filter((item) => item.product || item.size || item.color);
 };
 
-const formatExtraItems = (items = []) =>
+const formatProductItems = (items = []) =>
   items
     .filter((item) => item?.product)
     .map((item) => {
@@ -330,6 +546,12 @@ const formatExtraItems = (items = []) =>
       return details ? `${item.product} (${details})` : item.product;
     })
     .join(" / ");
+
+const getPrimaryItem = (items = []) =>
+  items.find((item) => item?.product) || { product: "—", size: "", color: "" };
+
+const formatExtraProductItems = (items = []) =>
+  formatProductItems(items.filter((_, index) => index > 0));
 
 const renderSettingsPanel = (title, key) => {
   const values = state.pools[key];
@@ -448,7 +670,7 @@ const getBaseFilteredIntegrations = () => {
   const date = qs("#integration-date-filter")?.value || "";
   return state.integrations.filter((integration) => {
     const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
-    const extraItems = formatExtraItems(integration.extraItems);
+    const itemsLabel = formatProductItems(integration.items || []);
     const haystack = [
       blogger?.name,
       blogger?.instagram,
@@ -456,10 +678,7 @@ const getBaseFilteredIntegrations = () => {
       integration.terms,
       integration.reach,
       integration.budget,
-      integration.product,
-      integration.color,
-      integration.size,
-      extraItems,
+      itemsLabel,
       integration.comment,
       integration.track,
     ].join(" ");
@@ -480,6 +699,9 @@ const renderIntegrationList = () => {
     .map((integration) => {
       const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
       const dateLabel = formatDateLabel(integration.date);
+      const primaryItem = getPrimaryItem(integration.items || []);
+      const extraCount = (integration.items || []).filter((_, index) => index > 0).length;
+      const extraLabel = extraCount ? ` + ещё ${extraCount}` : "";
       return `
         <div class="info-card" data-integration-id="${integration.id}">
           <h4>${blogger?.name || "Блогер"}</h4>
@@ -491,7 +713,7 @@ const renderIntegrationList = () => {
             <span>Охват: ${integration.reach ? formatInteger(parseNumber(integration.reach)) : "—"}</span>
           </div>
           <div class="pill-row">
-            <span class="pill">${integration.product}</span>
+            <span class="pill">${primaryItem.product}${extraLabel}</span>
           </div>
         </div>
       `;
@@ -511,7 +733,7 @@ const renderIntegrationStats = () => {
   const subfilter = qs("#stats-subfilter");
   const startDate = qs("#stats-date-start")?.value || "";
   const endDate = qs("#stats-date-end")?.value || "";
-  const isSubfilterActive = subfilter && !subfilter.classList.contains("hidden");
+  const isSubfilterActive = subfilter && subfilter.classList.contains("is-open");
   const filtered = getBaseFilteredIntegrations().filter((integration) => {
     if (!canViewOverallStats && integration.agent !== profileLogin) {
       return false;
@@ -601,6 +823,8 @@ const exportIntegrations = () => {
     const budget = parseNumber(integration.budget);
     const reach = parseNumber(integration.reach);
     const cpm = reach > 0 ? Math.round((budget / reach) * 1000) : "";
+    const primaryItem = getPrimaryItem(integration.items || []);
+    const extraItems = formatExtraProductItems(integration.items || []);
     return [
       integration.date || "",
       integration.agent || "",
@@ -614,10 +838,10 @@ const exportIntegrations = () => {
       budget || "",
       cpm,
       integration.ugcStatus || "",
-      integration.product || "",
-      integration.size || "",
-      integration.color || "",
-      formatExtraItems(integration.extraItems || []),
+      primaryItem.product || "",
+      primaryItem.size || "",
+      primaryItem.color || "",
+      extraItems,
       integration.comment || "",
       integration.track || "",
       integration.contacts || "",
@@ -675,12 +899,11 @@ const renderBloggerDetail = (bloggerId) => {
             <div class="info-card">
               <h4>${integration.format}</h4>
               <div class="info-meta">
-                <span>${integration.date || "—"}</span>
+                <span>${formatDateLabel(integration.date)}</span>
                 <span>UGC: ${integration.ugcStatus}</span>
               </div>
               <div class="pill-row">
-                <span class="pill">${integration.product}</span>
-                <span class="pill neutral">${integration.color}</span>
+                <span class="pill">${formatProductItems(integration.items || []) || "—"}</span>
               </div>
             </div>
           `
@@ -742,12 +965,14 @@ const openIntegrationModal = () => {
   if (agent) agent.value = profileLogin;
   const date = qs("#integration-date");
   if (date) {
-    const today = new Date().toISOString().split("T")[0];
-    date.value = today;
+    date.value = getTodayValue();
   }
-  const extraList = qs("#extra-products-list");
-  renderExtraItems(extraList, []);
-  qs("#blogger-picker")?.classList.add("hidden");
+  const productList = qs("#integration-products-list");
+  renderProductItems(productList, []);
+  if (productList && !productList.querySelector(".item-row")) {
+    addProductItemRow(productList, {});
+  }
+  qs("#blogger-dropdown")?.classList.remove("is-open");
   openModal("integration-modal");
   renderBloggerPicker();
 };
@@ -764,10 +989,7 @@ const saveIntegration = () => {
     reach: qs("#integration-reach")?.value.trim() || "",
     budget: qs("#integration-budget")?.value.trim() || "",
     ugcStatus: qs("#integration-ugc")?.value || "",
-    product: qs("#integration-product")?.value || "",
-    size: qs("#integration-size")?.value || "",
-    color: qs("#integration-color")?.value || "",
-    extraItems: collectExtraItems(qs("#extra-products-list")),
+    items: collectProductItems(qs("#integration-products-list")),
     comment: qs("#integration-comment")?.value.trim() || "",
     track: qs("#integration-track")?.value.trim() || "",
     contacts: qs("#integration-contacts")?.value.trim() || "",
@@ -796,28 +1018,29 @@ const openIntegrationDetail = (integrationId) => {
     ["Охваты", "integration-detail-reach", integration.reach, "number"],
     ["Бюджет", "integration-detail-budget", integration.budget],
     ["UGC", "integration-detail-ugc", integration.ugcStatus],
-    ["Изделие", "integration-detail-product", integration.product],
-    ["Размер", "integration-detail-size", integration.size],
-    ["Цвет", "integration-detail-color", integration.color],
   ]
     .map(([label, id, value, type]) => {
       const inputType = type || "text";
+      const extraAttrs =
+        inputType === "date" ? ' lang="ru" placeholder="дд.мм.гг"' : "";
       return `
         <label>
           ${label}
-          <input type="${inputType}" id="${id}" value="${value || ""}" />
+          <input type="${inputType}" id="${id}" value="${value || ""}"${extraAttrs} />
         </label>
       `;
     })
     .join("");
   container.innerHTML = `
     ${fields}
-    <div class="full extra-products">
+    <div class="full items-block">
       <div class="extra-products-header">
-        <span>Доп. изделия (до 5 шт)</span>
-        <button class="ghost small" type="button" id="add-extra-product-detail">+</button>
+        <span>Изделия (основное и доп.)</span>
       </div>
-      <div class="extra-products-list" id="extra-products-detail-list"></div>
+      <div class="items-list" id="integration-products-detail-list"></div>
+      <button class="ghost small add-item" type="button" id="add-product-item-detail">
+        + Добавить изделие
+      </button>
     </div>
     <label class="full">
       Комментарий
@@ -832,9 +1055,13 @@ const openIntegrationDetail = (integrationId) => {
       <input type="text" id="integration-detail-contacts" value="${integration.contacts || ""}" />
     </label>
   `;
-  renderExtraItems(qs("#extra-products-detail-list"), integration.extraItems || []);
-  qs("#add-extra-product-detail")?.addEventListener("click", () => {
-    addExtraItemRow(qs("#extra-products-detail-list"));
+  renderProductItems(qs("#integration-products-detail-list"), integration.items || []);
+  const detailList = qs("#integration-products-detail-list");
+  if (detailList && !detailList.querySelector(".item-row")) {
+    addProductItemRow(detailList, {});
+  }
+  qs("#add-product-item-detail")?.addEventListener("click", () => {
+    addProductItemRow(qs("#integration-products-detail-list"), {});
   });
   openModal("integration-detail-modal");
 };
@@ -850,10 +1077,7 @@ const saveIntegrationDetail = () => {
   integration.reach = qs("#integration-detail-reach")?.value.trim() || integration.reach;
   integration.budget = qs("#integration-detail-budget")?.value.trim() || integration.budget;
   integration.ugcStatus = qs("#integration-detail-ugc")?.value.trim() || integration.ugcStatus;
-  integration.product = qs("#integration-detail-product")?.value.trim() || integration.product;
-  integration.size = qs("#integration-detail-size")?.value.trim() || integration.size;
-  integration.color = qs("#integration-detail-color")?.value.trim() || integration.color;
-  integration.extraItems = collectExtraItems(qs("#extra-products-detail-list"));
+  integration.items = collectProductItems(qs("#integration-products-detail-list"));
   integration.comment =
     qs("#integration-detail-comment")?.value.trim() || integration.comment;
   integration.track = qs("#integration-detail-track")?.value.trim() || integration.track;
@@ -1013,23 +1237,15 @@ const initIntegrationsPage = () => {
   const dateEnd = qs("#stats-date-end");
   const subfilter = qs("#stats-subfilter");
   const toggleSubfilter = qs("#toggle-stats-subfilter");
-  const availableMonths = state.integrations
-    .map((integration) => getMonthKey(integration.date))
-    .filter(Boolean)
-    .sort();
-  if (availableMonths.length) {
-    if (monthInput && !monthInput.value) {
-      monthInput.value = availableMonths[availableMonths.length - 1];
-    }
-  }
-  [monthInput, dateStart, dateEnd].forEach((field) => {
-    field?.addEventListener("change", renderIntegrationStats);
-  });
+  setDefaultDateFields();
+  setStatsDateDefaults();
+  initStatsDatePickers();
   toggleSubfilter?.addEventListener("click", () => {
-    const isHidden = subfilter?.classList.contains("hidden");
-    subfilter?.classList.toggle("hidden", !isHidden);
-    toggleSubfilter?.setAttribute("aria-expanded", isHidden ? "true" : "false");
-    if (isHidden && monthInput && dateStart && dateEnd) {
+    const isOpen = subfilter?.classList.contains("is-open");
+    subfilter?.classList.toggle("is-open", !isOpen);
+    toggleSubfilter?.classList.toggle("is-open", !isOpen);
+    toggleSubfilter?.setAttribute("aria-expanded", isOpen ? "false" : "true");
+    if (!isOpen && monthInput && dateStart && dateEnd) {
       if (!dateStart.value && monthInput.value) {
         dateStart.value = `${monthInput.value}-01`;
       }
@@ -1044,23 +1260,36 @@ const initIntegrationsPage = () => {
   qs("#save-integration")?.addEventListener("click", saveIntegration);
 
   const pickerPanel = qs("#blogger-picker");
+  const pickerDropdown = qs("#blogger-dropdown");
   const pickerInput = qs("#integration-blogger");
   const openPicker = () => {
-    pickerPanel?.classList.remove("hidden");
+    pickerDropdown?.classList.add("is-open");
     renderBloggerPicker();
     qs("#blogger-picker-search")?.focus();
   };
   const closePicker = () => {
-    pickerPanel?.classList.add("hidden");
+    pickerDropdown?.classList.remove("is-open");
   };
-  pickerInput?.addEventListener("click", openPicker);
+  const togglePicker = () => {
+    if (!pickerDropdown) return;
+    const isOpen = pickerDropdown.classList.contains("is-open");
+    if (isOpen) {
+      closePicker();
+      return;
+    }
+    openPicker();
+  };
+  pickerInput?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    togglePicker();
+  });
   document.addEventListener("click", (event) => {
-    if (!pickerPanel || pickerPanel.classList.contains("hidden")) return;
+    if (!pickerDropdown || !pickerDropdown.classList.contains("is-open")) return;
     const target = event.target;
     if (
-      pickerPanel.contains(target) ||
+      pickerDropdown.contains(target) ||
       pickerInput?.contains(target) ||
-      target.closest("#blogger-picker")
+      target.closest("#blogger-dropdown")
     ) {
       return;
     }
@@ -1091,8 +1320,8 @@ const initIntegrationsPage = () => {
     renderBloggerPicker();
   });
 
-  qs("#add-extra-product")?.addEventListener("click", () => {
-    addExtraItemRow(qs("#extra-products-list"));
+  qs("#add-product-item")?.addEventListener("click", () => {
+    addProductItemRow(qs("#integration-products-list"), {});
   });
 
   [
@@ -1131,6 +1360,7 @@ const initModals = () => {
 
 const init = () => {
   updateFormPools();
+  setDefaultDateFields();
   initSettingsInteractions();
   initBloggersTabs();
   initBasePage();

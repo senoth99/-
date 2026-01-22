@@ -446,7 +446,6 @@ body[data-role="employee"] .admin-only {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.95);
 }
 
 .modal-close-row {
@@ -458,7 +457,6 @@ body[data-role="employee"] .admin-only {
 .modal-card.wide .modal-header {
   position: sticky;
   top: 0;
-  background: rgba(255, 255, 255, 0.95);
   z-index: 1;
   padding: 8px 0;
 }
@@ -1788,14 +1786,28 @@ td {
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 14px;
   padding: 12px;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 12px;
   background: #f8fafc;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
 }
 
 .picker-trigger {
   cursor: pointer;
+}
+
+.blogger-dropdown {
+  position: relative;
+}
+
+.blogger-dropdown.is-open .picker-panel {
+  display: flex;
 }
 
 .picker-header {
@@ -1831,6 +1843,90 @@ td {
   color: #64748b;
 }
 
+.datepicker-panel {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
+  padding: 12px;
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  background: #f8fafc;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 6;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+}
+
+.datepicker-panel.is-open {
+  display: flex;
+}
+
+.datepicker-field {
+  position: relative;
+}
+
+.datepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #111827;
+}
+
+.datepicker-nav {
+  border: none;
+  background: #eef2ff;
+  color: #4f46e5;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.datepicker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  font-size: 11px;
+  color: #64748b;
+  gap: 6px;
+  text-align: center;
+}
+
+.datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.datepicker-grid.month-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.datepicker-cell,
+.datepicker-blank {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  padding: 6px 0;
+  text-align: center;
+}
+
+.datepicker-cell {
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.datepicker-cell:hover {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.datepicker-cell.is-active {
+  background: #6366f1;
+  color: white;
+}
+
 .inline-actions {
   display: flex;
   align-items: center;
@@ -1855,13 +1951,15 @@ td {
   color: #475569;
 }
 
-.extra-products-list {
+.extra-products-list,
+.items-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.extra-product-row {
+.extra-product-row,
+.item-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 8px;
@@ -1870,6 +1968,20 @@ td {
   border-radius: 12px;
   background: white;
   border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.items-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  background: #f8fafc;
+}
+
+.add-item {
+  align-self: flex-start;
 }
 
 .extra-product-row .icon-btn {
@@ -1883,11 +1995,22 @@ td {
   padding: 6px 2px;
 }
 
-.stats-controls {
+.stats-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.stats-controls-main {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
   align-items: center;
+}
+
+.stats-subfilter-row {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .stats-control {
@@ -1903,20 +2026,47 @@ td {
 }
 
 .stats-toggle {
-  width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 36px;
+  width: 36px;
   border-radius: 12px;
   background: #eef2ff;
   color: #4f46e5;
 }
 
+.stats-toggle-icon {
+  display: inline-flex;
+  transition: transform 250ms ease;
+  font-size: 16px;
+}
+
+.stats-toggle.is-open .stats-toggle-icon {
+  transform: rotate(180deg);
+}
+
 .stats-subfilter {
   display: flex;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 0 12px;
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid rgba(148, 163, 184, 0.3);
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  overflow: hidden;
+  transition: max-height 250ms ease, opacity 250ms ease, transform 250ms ease;
+  pointer-events: none;
+}
+
+.stats-subfilter.is-open {
+  max-height: 120px;
+  padding: 10px 12px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .stats-best-icon {
