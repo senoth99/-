@@ -3,6 +3,27 @@ const qs = (id) => document.getElementById(id);
 const TASKS_KEY = "crm.tasks";
 const KNOWLEDGE_KEY = "crm.knowledge";
 
+const getTodayValue = () => new Date().toISOString().split("T")[0];
+
+const formatDateLabel = (value) => {
+  if (!value) return "—";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString("ru-RU");
+};
+
+const setDefaultDeadline = () => {
+  const deadline = qs("task-deadline");
+  if (!deadline) return;
+  if (!deadline.value) {
+    deadline.value = getTodayValue();
+  }
+  deadline.setAttribute("lang", "ru");
+  if (!deadline.getAttribute("placeholder")) {
+    deadline.setAttribute("placeholder", "дд.мм.гг");
+  }
+};
+
 const defaultTasks = [
   {
     id: "t1",
@@ -96,13 +117,14 @@ function renderTasks(tasks) {
   if (!body) return;
   body.innerHTML = "";
   tasks.forEach((task) => {
+    const deadlineLabel = formatDateLabel(task.deadline);
     const row = document.createElement("tr");
     row.innerHTML = `
       <td><span class="tag tag-status">${task.status}</span></td>
       <td><span class="tag tag-priority">${task.priority}</span></td>
       <td>${task.title}</td>
       <td>${task.assignee}</td>
-      <td>${task.deadline || "—"}</td>
+      <td>${deadlineLabel}</td>
       <td><button class="ghost small" data-task-delete="${task.id}">Удалить</button></td>
     `;
     body.appendChild(row);
@@ -164,6 +186,7 @@ function init() {
   renderTasks(tasks);
   renderKnowledge(knowledge);
   renderStats(tasks);
+  setDefaultDeadline();
 
   loadAssignees();
 
@@ -188,6 +211,7 @@ function init() {
     setStored(TASKS_KEY, next);
     qs("task-title").value = "";
     qs("task-deadline").value = "";
+    setDefaultDeadline();
     renderTasks(next);
     renderStats(next);
   });
