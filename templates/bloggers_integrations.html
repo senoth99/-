@@ -230,13 +230,13 @@
     <div class="modal hidden" id="integration-modal">
       <div class="modal-card wide popup-card popup">
         <div class="modal-header popup-header">
-          <div>
+          <div class="title">
             <h3 id="integration-modal-title">Добавление интеграции</h3>
             <p class="modal-subtitle">
               Обязательные поля отмечены красной звёздочкой.
             </p>
           </div>
-          <button class="icon-btn" data-close-modal="integration-modal">✕</button>
+          <button class="icon-btn close" data-close-modal="integration-modal">✕</button>
         </div>
         <div class="popup-body">
           <div class="form-grid">
@@ -306,9 +306,6 @@
             </select>
           </label>
           <div class="full items-block" id="integration-products">
-            <div class="extra-products-header">
-              <span>Изделия (основное и доп.)</span>
-            </div>
             <div class="items-list" id="integration-products-list"></div>
             <button class="ghost small add-item" type="button" id="add-product-item">
               + Добавить изделие
@@ -345,11 +342,11 @@
     <div class="modal hidden" id="integration-detail-modal">
       <div class="modal-card wide popup-card popup">
         <div class="modal-header popup-header">
-          <div>
+          <div class="title">
             <h3 id="integration-detail-title">Интеграция</h3>
             <p class="modal-subtitle">Карточка интеграции с возможностью редактирования.</p>
           </div>
-          <button class="icon-btn" data-close-modal="integration-detail-modal">✕</button>
+          <button class="icon-btn close" data-close-modal="integration-detail-modal">✕</button>
         </div>
         <div class="popup-body">
           <div class="form-grid" id="integration-detail-fields"></div>
