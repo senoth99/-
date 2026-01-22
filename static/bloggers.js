@@ -398,7 +398,7 @@ const initStatsDatePickers = () => {
         targetInput.value = value;
         displayInput.value = formatMonthDisplay(value);
         panel.classList.remove("is-open");
-        updateStatistics({ month: value });
+        updateStatistics(getStatsFiltersFromInputs());
       }
 
       const dayButton = event.target.closest("[data-day]");
@@ -410,11 +410,7 @@ const initStatsDatePickers = () => {
         targetInput.value = value;
         displayInput.value = formatDateDisplay(value);
         panel.classList.remove("is-open");
-        if (targetInput.id === "stats-date-start") {
-          updateStatistics({ startDate: value });
-        } else if (targetInput.id === "stats-date-end") {
-          updateStatistics({ endDate: value });
-        }
+        updateStatistics(getStatsFiltersFromInputs());
       }
     });
   });
@@ -1062,9 +1058,6 @@ const openIntegrationDetail = (integrationId) => {
   container.innerHTML = `
     ${fields}
     <div class="full items-block">
-      <div class="extra-products-header">
-        <span>Изделия (основное и доп.)</span>
-      </div>
       <div class="items-list" id="integration-products-detail-list"></div>
       <button class="ghost small add-item" type="button" id="add-product-item-detail">
         + Добавить изделие

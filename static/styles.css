@@ -2097,6 +2097,7 @@ td {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+  overflow: visible;
 }
 
 .stats-best-icon {
