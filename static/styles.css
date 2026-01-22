@@ -442,6 +442,10 @@ body[data-role="employee"] .admin-only {
   overflow-y: auto;
 }
 
+.modal-card.popup-card {
+  overflow: hidden;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -454,16 +458,27 @@ body[data-role="employee"] .admin-only {
   margin-top: -8px;
 }
 
-.modal-card.wide .modal-header {
+.modal-card.wide:not(.popup-card) .modal-header {
   position: sticky;
   top: 0;
   z-index: 1;
   padding: 8px 0;
 }
 
-.modal-card.wide.scrollable-header .modal-header {
-  position: static;
-  padding: 0;
+.popup-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: inherit;
+}
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .icon-btn {
@@ -2006,11 +2021,7 @@ td {
   display: flex;
   gap: 12px;
   align-items: center;
-}
-
-.stats-subfilter-row {
-  display: flex;
-  justify-content: flex-end;
+  position: relative;
 }
 
 .stats-control {
@@ -2053,6 +2064,9 @@ td {
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid rgba(148, 163, 184, 0.3);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
   max-height: 0;
   opacity: 0;
   transform: translateY(-6px);

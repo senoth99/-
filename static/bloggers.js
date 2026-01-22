@@ -514,13 +514,22 @@ const addProductItemRow = (container, item = {}) => {
     row.remove();
   });
   row.append(productSelect, sizeSelect, colorSelect, removeButton);
+  const addButton = container.querySelector(".add-item");
+  if (addButton) {
+    container.insertBefore(row, addButton);
+    return;
+  }
   container.appendChild(row);
 };
 
 const renderProductItems = (container, items = []) => {
   if (!container) return;
+  const addButton = container.querySelector(".add-item");
   container.innerHTML = "";
   items.forEach((item) => addProductItemRow(container, item));
+  if (addButton) {
+    container.appendChild(addButton);
+  }
 };
 
 const collectProductItems = (container) => {
@@ -1037,10 +1046,11 @@ const openIntegrationDetail = (integrationId) => {
       <div class="extra-products-header">
         <span>Изделия (основное и доп.)</span>
       </div>
-      <div class="items-list" id="integration-products-detail-list"></div>
-      <button class="ghost small add-item" type="button" id="add-product-item-detail">
-        + Добавить изделие
-      </button>
+      <div class="items-list" id="integration-products-detail-list">
+        <button class="ghost small add-item" type="button" id="add-product-item-detail">
+          + Добавить изделие
+        </button>
+      </div>
     </div>
     <label class="full">
       Комментарий
