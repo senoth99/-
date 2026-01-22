@@ -2,6 +2,10 @@ const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
 
 const profileLogin = document.body?.dataset?.profileLogin || "employee";
+const role = document.body?.dataset?.role || "employee";
+const hasBloggersSettingsAccess =
+  document.body?.dataset?.accessBloggersSettings === "true";
+const canViewOverallStats = role === "admin" || hasBloggersSettingsAccess;
 
 const state = {
   pools: {
@@ -153,6 +157,23 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
+const formatDateLabel = (value) => {
+  if (!value) return "—";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString("ru-RU");
+};
+
+const formatMonthLabel = (value) => {
+  if (!value) return "—";
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return value;
+  return new Date(year, month - 1, 1).toLocaleDateString("ru-RU", {
+    month: "long",
+    year: "numeric",
+  });
+};
+
 const levenshtein = (a, b) => {
   if (a === b) return 0;
   if (!a) return b.length;
@@ -246,6 +267,8 @@ const createSelect = (options, value) => {
 
 const addExtraItemRow = (container, item = {}) => {
   if (!container) return;
+  const emptyState = container.querySelector(".extra-products-empty");
+  if (emptyState) emptyState.remove();
   if (container.querySelectorAll(".extra-product-row").length >= MAX_EXTRA_ITEMS) {
     showNotification("Можно добавить не более 5 доп. изделий.", "info");
     return;
@@ -279,6 +302,12 @@ const renderExtraItems = (container, items = []) => {
   if (!container) return;
   container.innerHTML = "";
   items.forEach((item) => addExtraItemRow(container, item));
+  if (!items.length) {
+    const emptyState = document.createElement("div");
+    emptyState.className = "extra-products-empty";
+    emptyState.textContent = "Нажмите «+», чтобы добавить доп. изделие.";
+    container.appendChild(emptyState);
+  }
 };
 
 const collectExtraItems = (container) => {
@@ -450,21 +479,19 @@ const renderIntegrationList = () => {
   list.innerHTML = filtered
     .map((integration) => {
       const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
+      const dateLabel = formatDateLabel(integration.date);
       return `
         <div class="info-card" data-integration-id="${integration.id}">
           <h4>${blogger?.name || "Блогер"}</h4>
           <div class="info-meta">
             <span>Формат: ${integration.format}</span>
             <span>Условия: ${integration.terms}</span>
+            <span>Дата: ${dateLabel}</span>
             <span>Бюджет: ${integration.budget || "—"}</span>
             <span>Охват: ${integration.reach ? formatInteger(parseNumber(integration.reach)) : "—"}</span>
           </div>
           <div class="pill-row">
             <span class="pill">${integration.product}</span>
-            <span class="pill neutral">${integration.color}</span>
-            <span class="pill ${integration.ugcStatus === "Сдан" ? "success" : "neutral"}">
-              UGC: ${integration.ugcStatus}
-            </span>
           </div>
         </div>
       `;
@@ -480,13 +507,20 @@ const getMonthKey = (dateValue) => {
 const renderIntegrationStats = () => {
   const countEl = qs("#stats-count");
   if (!countEl) return;
-  const startMonth = qs("#stats-month-start")?.value || "";
-  const endMonth = qs("#stats-month-end")?.value || "";
+  const selectedMonth = qs("#stats-month")?.value || "";
+  const subfilter = qs("#stats-subfilter");
+  const startDate = qs("#stats-date-start")?.value || "";
+  const endDate = qs("#stats-date-end")?.value || "";
+  const isSubfilterActive = subfilter && !subfilter.classList.contains("hidden");
   const filtered = getBaseFilteredIntegrations().filter((integration) => {
+    if (!canViewOverallStats && integration.agent !== profileLogin) {
+      return false;
+    }
     const month = getMonthKey(integration.date);
     if (!month) return false;
-    if (startMonth && month < startMonth) return false;
-    if (endMonth && month > endMonth) return false;
+    if (selectedMonth && month !== selectedMonth) return false;
+    if (isSubfilterActive && startDate && integration.date < startDate) return false;
+    if (isSubfilterActive && endDate && integration.date > endDate) return false;
     return true;
   });
 
@@ -505,6 +539,12 @@ const renderIntegrationStats = () => {
   const cpm =
     totals.reach > 0 ? Math.round((totals.budget / totals.reach) * 1000) : null;
   const bestManager = Object.entries(totals.managers).sort((a, b) => b[1] - a[1])[0];
+  const periodLabel = (() => {
+    if (isSubfilterActive && (startDate || endDate)) {
+      return `${formatDateLabel(startDate)} — ${formatDateLabel(endDate)}`;
+    }
+    return formatMonthLabel(selectedMonth);
+  })();
 
   countEl.textContent = formatInteger(totals.count);
   qs("#stats-budget").textContent = totals.count
@@ -514,9 +554,16 @@ const renderIntegrationStats = () => {
     ? formatInteger(totals.reach)
     : "—";
   qs("#stats-cpm").textContent = cpm ? formatCurrency(cpm) : "—";
-  qs("#stats-best-manager").textContent = bestManager
-    ? `Лучший менеджер: ${bestManager[0]} (${bestManager[1]} интеграций)`
-    : "Лучший менеджер: —";
+  qs("#stats-best-name").textContent = bestManager
+    ? `${bestManager[0]} · ${bestManager[1]} интеграций`
+    : "—";
+  qs("#stats-best-period").textContent = `За период ${periodLabel}`;
+  const scopeNote = qs("#stats-scope-note");
+  if (scopeNote) {
+    scopeNote.textContent = canViewOverallStats
+      ? "Показана общая статистика по всем менеджерам."
+      : "Показана статистика только по вашим интеграциям.";
+  }
 };
 
 const refreshIntegrationViews = () => {
@@ -961,22 +1008,35 @@ const initIntegrationsPage = () => {
   renderBloggerPicker();
   refreshIntegrationViews();
 
-  const monthStart = qs("#stats-month-start");
-  const monthEnd = qs("#stats-month-end");
+  const monthInput = qs("#stats-month");
+  const dateStart = qs("#stats-date-start");
+  const dateEnd = qs("#stats-date-end");
+  const subfilter = qs("#stats-subfilter");
+  const toggleSubfilter = qs("#toggle-stats-subfilter");
   const availableMonths = state.integrations
     .map((integration) => getMonthKey(integration.date))
     .filter(Boolean)
     .sort();
   if (availableMonths.length) {
-    if (monthStart && !monthStart.value) {
-      monthStart.value = availableMonths[0];
-    }
-    if (monthEnd && !monthEnd.value) {
-      monthEnd.value = availableMonths[availableMonths.length - 1];
+    if (monthInput && !monthInput.value) {
+      monthInput.value = availableMonths[availableMonths.length - 1];
     }
   }
-  [monthStart, monthEnd].forEach((field) => {
+  [monthInput, dateStart, dateEnd].forEach((field) => {
     field?.addEventListener("change", renderIntegrationStats);
+  });
+  toggleSubfilter?.addEventListener("click", () => {
+    const isHidden = subfilter?.classList.contains("hidden");
+    subfilter?.classList.toggle("hidden", !isHidden);
+    toggleSubfilter?.setAttribute("aria-expanded", isHidden ? "true" : "false");
+    if (isHidden && monthInput && dateStart && dateEnd) {
+      if (!dateStart.value && monthInput.value) {
+        dateStart.value = `${monthInput.value}-01`;
+      }
+      if (!dateEnd.value && monthInput.value) {
+        dateEnd.value = `${monthInput.value}-31`;
+      }
+    }
   });
   renderIntegrationStats();
 
