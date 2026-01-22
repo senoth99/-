@@ -1980,15 +1980,13 @@ td {
   color: #475569;
 }
 
-.extra-products-list,
-.items-list {
+.extra-products-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.extra-product-row,
-.item-row {
+.extra-product-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 8px;
@@ -1999,7 +1997,7 @@ td {
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.items-block {
+.items-container {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2009,7 +2007,33 @@ td {
   background: #f8fafc;
 }
 
-.add-item {
+.items-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.item-row select {
+  flex: 1;
+}
+
+.item-row .remove-item {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+
+.add-item-button {
   align-self: flex-start;
 }
 

@@ -61,18 +61,7 @@ const state = {
       reach: "120000",
       budget: "0",
       ugcStatus: "Сдан",
-      items: [
-        {
-          product: 'Джерси "Light Classic"',
-          size: "M",
-          color: "Белый",
-        },
-        {
-          product: 'Джерси "Light Classic"',
-          size: "S",
-          color: "Черный",
-        },
-      ],
+      items: ['Джерси "Light Classic"', 'Джерси "Light Classic"'],
       comment: "Снимаем три коротких ролика.",
       track: "102104",
       contacts: "@maria_fit",
@@ -87,13 +76,7 @@ const state = {
       reach: "80000",
       budget: "45000",
       ugcStatus: "Не сдан",
-      items: [
-        {
-          product: 'Джерси "Light Classic"',
-          size: "L",
-          color: "Черный",
-        },
-      ],
+      items: ['Джерси "Light Classic"'],
       comment: "Обсуждается повторная интеграция.",
       track: "",
       contacts: "instagram.com/gromov_life",
@@ -223,6 +206,15 @@ const getCurrentMonthValue = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 };
 
+const getLatestIntegrationMonth = () => {
+  const dates = state.integrations
+    .map((integration) => integration.date)
+    .filter(Boolean)
+    .sort();
+  if (!dates.length) return "";
+  return dates[dates.length - 1].slice(0, 7);
+};
+
 const setDefaultDateFields = () => {
   const todayValue = getTodayValue();
   qsa('input[type="date"]').forEach((input) => {
@@ -250,17 +242,16 @@ const setStatsDateDefaults = () => {
   const startDisplay = qs("#stats-date-start-display");
   const endInput = qs("#stats-date-end");
   const endDisplay = qs("#stats-date-end-display");
-  const today = getTodayValue();
   const currentMonth = getCurrentMonthValue();
+  const latestMonth = getLatestIntegrationMonth();
+  const defaultMonth = latestMonth || currentMonth;
 
   if (monthInput && !monthInput.value) {
-    monthInput.value = currentMonth;
+    monthInput.value = defaultMonth;
   }
   if (monthDisplay) {
     monthDisplay.value = formatMonthDisplay(monthInput?.value || "");
   }
-  if (startInput && !startInput.value) startInput.value = today;
-  if (endInput && !endInput.value) endInput.value = today;
   if (startDisplay) startDisplay.value = formatDateDisplay(startInput?.value || "");
   if (endDisplay) endDisplay.value = formatDateDisplay(endInput?.value || "");
   setStatsFilters({
@@ -512,21 +503,19 @@ const createSelect = (options, value, allowEmpty = false) => {
   return select;
 };
 
-const addProductItemRow = (container, item = {}, index, items, onItemsChange) => {
+const addProductItemRow = (container, item = "", index, items, onItemsChange) => {
   if (!container) return;
   const row = document.createElement("div");
   row.className = "item-row";
-  const productSelect = createSelect(state.pools.products, item.product || "", true);
+  const productSelect = createSelect(state.pools.products, item || "", true);
   productSelect.classList.add("product");
-  const sizeSelect = createSelect(state.pools.sizes, item.size || "", true);
-  sizeSelect.classList.add("size");
-  const colorSelect = createSelect(state.pools.colors, item.color || "", true);
-  colorSelect.classList.add("color");
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "icon-btn danger remove-item";
   removeButton.textContent = "×";
+  removeButton.disabled = items.length <= 1;
   removeButton.addEventListener("click", () => {
+    if (items.length <= 1) return;
     if (!onItemsChange) {
       row.remove();
       return;
@@ -534,21 +523,15 @@ const addProductItemRow = (container, item = {}, index, items, onItemsChange) =>
     const nextItems = items.filter((_, idx) => idx !== index);
     onItemsChange(nextItems);
   });
-  [productSelect, sizeSelect, colorSelect].forEach((select) => {
-    select.addEventListener("change", () => {
-      if (!onItemsChange) return;
-      const nextItems = items.map((current, idx) => {
-        if (idx !== index) return current;
-        return {
-          product: productSelect.value,
-          size: sizeSelect.value,
-          color: colorSelect.value,
-        };
-      });
-      onItemsChange(nextItems);
+  productSelect.addEventListener("change", () => {
+    if (!onItemsChange) return;
+    const nextItems = items.map((current, idx) => {
+      if (idx !== index) return current;
+      return productSelect.value;
     });
+    onItemsChange(nextItems);
   });
-  row.append(productSelect, sizeSelect, colorSelect, removeButton);
+  row.append(productSelect, removeButton);
   container.appendChild(row);
 };
 
@@ -561,14 +544,13 @@ const renderProductItems = (container, items = [], onItemsChange) => {
 };
 
 const normalizeProductItems = (items = []) =>
-  items.map((item) => ({
-    product: item?.product || "",
-    size: item?.size || "",
-    color: item?.color || "",
-  }));
+  items.map((item) => (typeof item === "string" ? item : item?.product || ""));
+
+const ensureProductItems = (items = []) =>
+  items.length ? items : [""];
 
 const getValidProductItems = (items = []) =>
-  items.filter((item) => item.product || item.size || item.color);
+  items.filter((item) => item);
 
 const updateIntegrationItems = (stateKey, container, items) => {
   if (!container) return;
@@ -580,15 +562,12 @@ const updateIntegrationItems = (stateKey, container, items) => {
 
 const formatProductItems = (items = []) =>
   items
-    .filter((item) => item?.product)
-    .map((item) => {
-      const details = [item.size, item.color].filter(Boolean).join(", ");
-      return details ? `${item.product} (${details})` : item.product;
-    })
+    .filter((item) => item)
+    .map((item) => item)
     .join(" / ");
 
 const getPrimaryItem = (items = []) =>
-  items.find((item) => item?.product) || { product: "—", size: "", color: "" };
+  items.find((item) => item) || "—";
 
 const formatExtraProductItems = (items = []) =>
   formatProductItems(items.filter((_, index) => index > 0));
@@ -753,7 +732,7 @@ const renderIntegrationList = () => {
             <span>Охват: ${integration.reach ? formatInteger(parseNumber(integration.reach)) : "—"}</span>
           </div>
           <div class="pill-row">
-            <span class="pill">${primaryItem.product}${extraLabel}</span>
+            <span class="pill">${primaryItem}${extraLabel}</span>
           </div>
         </div>
       `;
@@ -896,9 +875,9 @@ const exportIntegrations = () => {
       budget || "",
       cpm,
       integration.ugcStatus || "",
-      primaryItem.product || "",
-      primaryItem.size || "",
-      primaryItem.color || "",
+      primaryItem || "",
+      "",
+      "",
       extraItems,
       integration.comment || "",
       integration.track || "",
@@ -1026,7 +1005,7 @@ const openIntegrationModal = () => {
     date.value = getTodayValue();
   }
   const productList = qs("#integration-products-list");
-  state.integrationFormItems = [];
+  state.integrationFormItems = ensureProductItems([]);
   updateIntegrationItems("integrationFormItems", productList, state.integrationFormItems);
   qs("#blogger-dropdown")?.classList.remove("is-open");
   openModal("integration-modal");
@@ -1089,9 +1068,9 @@ const openIntegrationDetail = (integrationId) => {
     .join("");
   container.innerHTML = `
     ${fields}
-    <div class="full items-block">
-      <div class="items-list" id="integration-products-detail-list"></div>
-      <button class="ghost small add-item" type="button" id="add-product-item-detail">
+    <div class="full items-container">
+      <div class="items-rows" id="integration-products-detail-list"></div>
+      <button class="ghost small add-item-button" type="button" id="add-product-item-detail">
         + Добавить изделие
       </button>
     </div>
@@ -1109,7 +1088,9 @@ const openIntegrationDetail = (integrationId) => {
     </label>
   `;
   const detailList = qs("#integration-products-detail-list");
-  state.integrationDetailItems = normalizeProductItems(integration.items || []);
+  state.integrationDetailItems = ensureProductItems(
+    normalizeProductItems(integration.items || [])
+  );
   updateIntegrationItems(
     "integrationDetailItems",
     detailList,
@@ -1120,7 +1101,7 @@ const openIntegrationDetail = (integrationId) => {
     addDetailButton.onclick = () => {
       updateIntegrationItems("integrationDetailItems", detailList, [
         ...state.integrationDetailItems,
-        {},
+        "",
       ]);
     };
   }
@@ -1400,7 +1381,7 @@ const initIntegrationsPage = () => {
     const productList = qs("#integration-products-list");
     updateIntegrationItems("integrationFormItems", productList, [
       ...state.integrationFormItems,
-      {},
+      "",
     ]);
   });
 
