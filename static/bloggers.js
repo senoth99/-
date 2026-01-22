@@ -219,6 +219,7 @@ const getCurrentMonthValue = () => {
 const setDefaultDateFields = () => {
   const todayValue = getTodayValue();
   qsa('input[type="date"]').forEach((input) => {
+    if (input.dataset.skipDefault === "true") return;
     if (!input.value) input.value = todayValue;
     input.setAttribute("lang", "ru");
     if (!input.getAttribute("placeholder")) {
