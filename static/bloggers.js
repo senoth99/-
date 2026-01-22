@@ -7,81 +7,20 @@ const hasBloggersSettingsAccess =
   document.body?.dataset?.accessBloggersSettings === "true";
 const canViewOverallStats = role === "admin" || hasBloggersSettingsAccess;
 
-const state = {
-  pools: {
-    niches: ["UGC", "Бьюти", "Лайфстайл", "Спорт"],
-    formats: ["Инст-фотопост", "Рилс", "ТГ", "UGC", "Тикток", "Твич"],
-    products: ['Джерси "Light Classic"'],
-    colors: ["Белый", "Черный"],
-    sizes: ["S", "M", "L", "XL"],
-  },
-  bloggers: [
-    {
-      id: 1,
-      name: "Мария Иванова",
-      instagram: "instagram.com/maria_fit",
-      telegram: "t.me/maria_fit",
-      tiktok: "tiktok.com/@maria_fit",
-      niche: "UGC",
-      category: "Мидл",
-      status: "Новый",
-      tags: ["UGC", "спорт"],
-    },
-    {
-      id: 2,
-      name: "Алексей Громов",
-      instagram: "instagram.com/gromov_life",
-      telegram: "t.me/gromov_life",
-      tiktok: "tiktok.com/@gromovlife",
-      niche: "Лайфстайл",
-      category: "Крупный",
-      status: "Новый",
-      tags: ["лайфстайл", "мода"],
-    },
-    {
-      id: 3,
-      name: "Анна Миронова",
-      instagram: "instagram.com/anna_ugc",
-      telegram: "t.me/anna_ugc",
-      tiktok: "tiktok.com/@anna_ugc",
-      niche: "UGC",
-      category: "Микро",
-      status: "Новый",
-      tags: ["UGC", "beauty"],
-    },
-  ],
-  integrations: [
-    {
-      id: 1,
-      bloggerId: 1,
-      agent: profileLogin,
-      date: "2024-01-15",
-      terms: "Бартер",
-      format: "UGC",
-      reach: "120000",
-      budget: "0",
-      ugcStatus: "Сдан",
-      items: ['Джерси "Light Classic"', 'Джерси "Light Classic"'],
-      comment: "Снимаем три коротких ролика.",
-      track: "102104",
-      contacts: "@maria_fit",
-    },
-    {
-      id: 2,
-      bloggerId: 2,
-      agent: profileLogin,
-      date: "2024-01-20",
-      terms: "КМ",
-      format: "Инст-фотопост",
-      reach: "80000",
-      budget: "45000",
-      ugcStatus: "Не сдан",
-      items: ['Джерси "Light Classic"'],
-      comment: "Обсуждается повторная интеграция.",
-      track: "",
-      contacts: "instagram.com/gromov_life",
-    },
-  ],
+const STORAGE_KEY = "bloggers_state_v1";
+
+const defaultPools = {
+  niches: ["UGC", "Бьюти", "Лайфстайл", "Спорт"],
+  formats: ["Инст-фотопост", "Рилс", "ТГ", "UGC", "Тикток", "Твич"],
+  products: ['Джерси "Light Classic"'],
+  colors: ["Белый", "Черный"],
+  sizes: ["S", "M", "L", "XL"],
+};
+
+const createDefaultState = () => ({
+  pools: { ...defaultPools },
+  bloggers: [],
+  integrations: [],
   statsFilters: {
     month: "",
     startDate: "",
@@ -89,6 +28,45 @@ const state = {
   },
   integrationFormItems: [],
   integrationDetailItems: [],
+});
+
+const loadStoredState = () => {
+  try {
+    const raw = window.localStorage?.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn("Failed to load bloggers state:", error);
+    return null;
+  }
+};
+
+const persistState = () => {
+  try {
+    if (!window.localStorage) return;
+    const payload = {
+      pools: state.pools,
+      bloggers: state.bloggers,
+      integrations: state.integrations,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("Failed to save bloggers state:", error);
+  }
+};
+
+const storedState = loadStoredState();
+const defaultState = createDefaultState();
+
+const state = {
+  ...defaultState,
+  ...storedState,
+  pools: { ...defaultPools, ...(storedState?.pools || {}) },
+  bloggers: Array.isArray(storedState?.bloggers) ? storedState.bloggers : [],
+  integrations: Array.isArray(storedState?.integrations)
+    ? storedState.integrations
+    : [],
+  statsFilters: { ...defaultState.statsFilters, ...(storedState?.statsFilters || {}) },
 };
 
 let selectedBloggerId = null;
@@ -1055,6 +1033,7 @@ const deleteBlogger = () => {
     if (input) input.value = "";
   }
   activeBloggerId = null;
+  persistState();
   closeModal("blogger-detail-modal");
   renderBloggerList();
   renderBloggerPicker();
@@ -1097,6 +1076,7 @@ const addBlogger = () => {
   updateFormPools();
   renderBloggerList();
   renderBloggerPicker();
+  persistState();
   if (qs("#integration-blogger")) {
     selectedBloggerId = blogger.id;
     qs("#integration-blogger").value = blogger.name;
@@ -1142,6 +1122,7 @@ const saveIntegration = () => {
     contacts: qs("#integration-contacts")?.value.trim() || "",
   };
   state.integrations.unshift(integration);
+  persistState();
   closeModal("integration-modal");
   refreshIntegrationViews();
   showNotification("Интеграция сохранена.", "success");
@@ -1241,6 +1222,7 @@ const saveIntegrationDetail = () => {
   integration.track = qs("#integration-detail-track")?.value.trim() || integration.track;
   integration.contacts =
     qs("#integration-detail-contacts")?.value.trim() || integration.contacts;
+  persistState();
   closeModal("integration-detail-modal");
   refreshIntegrationViews();
   showNotification("Изменения по интеграции сохранены.", "success");
@@ -1260,6 +1242,7 @@ const deleteIntegration = () => {
     (item) => item.id !== activeIntegrationId
   );
   activeIntegrationId = null;
+  persistState();
   closeModal("integration-detail-modal");
   refreshIntegrationViews();
   showNotification("Интеграция удалена.", "info");
@@ -1285,6 +1268,7 @@ const initSettingsInteractions = () => {
       updateFormPools();
       renderBloggerList();
       renderBloggerPicker();
+      persistState();
       showNotification("Новое значение добавлено в настройки.", "success");
     }
     const removeButton = event.target.closest("[data-remove-tag]");
@@ -1298,6 +1282,7 @@ const initSettingsInteractions = () => {
       updateFormPools();
       renderBloggerList();
       renderBloggerPicker();
+      persistState();
       showNotification("Значение удалено из настроек.", "info");
     }
   });

@@ -151,8 +151,8 @@ body {
 }
 
 .ghost.danger {
-  background: rgba(239, 68, 68, 0.18);
-  color: #fee2e2;
+  background: #ef4444;
+  color: #ffffff;
 }
 
 .menu-link {
