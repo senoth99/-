@@ -482,7 +482,7 @@ body[data-role="employee"] .admin-only {
 
 .popup-header {
   background: inherit;
-  padding: 24px 24px 0;
+  padding: 24px 24px 12px;
 }
 
 .popup-body {
@@ -2035,6 +2035,18 @@ td {
 
 .add-item-button {
   align-self: flex-start;
+  background: #6366f1;
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.2);
+}
+
+.add-item-button:hover {
+  background: #4f46e5;
+}
+
+.add-item-button:active {
+  background: #4338ca;
 }
 
 .extra-product-row .icon-btn {

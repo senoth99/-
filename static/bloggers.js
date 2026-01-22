@@ -490,12 +490,25 @@ const updateFormPools = () => {
   updatePoolFilters();
 };
 
-const createSelect = (options, value, allowEmpty = false) => {
+const createEmptyProductItem = () => ({ product: "", size: "", color: "" });
+
+const normalizeProductItem = (item) => {
+  if (typeof item === "string") {
+    return { product: item, size: "", color: "" };
+  }
+  return {
+    product: item?.product || "",
+    size: item?.size || "",
+    color: item?.color || "",
+  };
+};
+
+const createSelect = (options, value, placeholder) => {
   const select = document.createElement("select");
-  const items = allowEmpty ? ["", ...options] : options;
+  const items = ["", ...options];
   select.innerHTML = items
     .map((option) => {
-      const label = option || "Выберите";
+      const label = option || placeholder || "Выберите";
       const selected = option === value ? "selected" : "";
       return `<option value="${option}" ${selected}>${label}</option>`;
     })
@@ -503,12 +516,24 @@ const createSelect = (options, value, allowEmpty = false) => {
   return select;
 };
 
-const addProductItemRow = (container, item = "", index, items, onItemsChange) => {
+const addProductItemRow = (container, item = {}, index, items, onItemsChange) => {
   if (!container) return;
   const row = document.createElement("div");
   row.className = "item-row";
-  const productSelect = createSelect(state.pools.products, item || "", true);
+  const currentItem = normalizeProductItem(item);
+  const productSelect = createSelect(
+    state.pools.products,
+    currentItem.product,
+    "Изделие"
+  );
   productSelect.classList.add("product");
+  productSelect.setAttribute("aria-label", "Изделие");
+  const sizeSelect = createSelect(state.pools.sizes, currentItem.size, "Размер");
+  sizeSelect.classList.add("size");
+  sizeSelect.setAttribute("aria-label", "Размер");
+  const colorSelect = createSelect(state.pools.colors, currentItem.color, "Цвет");
+  colorSelect.classList.add("color");
+  colorSelect.setAttribute("aria-label", "Цвет");
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "icon-btn danger remove-item";
@@ -523,15 +548,27 @@ const addProductItemRow = (container, item = "", index, items, onItemsChange) =>
     const nextItems = items.filter((_, idx) => idx !== index);
     onItemsChange(nextItems);
   });
-  productSelect.addEventListener("change", () => {
+
+  const handleItemUpdate = (nextValues) => {
     if (!onItemsChange) return;
     const nextItems = items.map((current, idx) => {
-      if (idx !== index) return current;
-      return productSelect.value;
+      if (idx !== index) return normalizeProductItem(current);
+      return { ...normalizeProductItem(current), ...nextValues };
     });
     onItemsChange(nextItems);
+  };
+
+  productSelect.addEventListener("change", () => {
+    handleItemUpdate({ product: productSelect.value });
   });
-  row.append(productSelect, removeButton);
+  sizeSelect.addEventListener("change", () => {
+    handleItemUpdate({ size: sizeSelect.value });
+  });
+  colorSelect.addEventListener("change", () => {
+    handleItemUpdate({ color: colorSelect.value });
+  });
+
+  row.append(productSelect, sizeSelect, colorSelect, removeButton);
   container.appendChild(row);
 };
 
@@ -543,14 +580,13 @@ const renderProductItems = (container, items = [], onItemsChange) => {
   });
 };
 
-const normalizeProductItems = (items = []) =>
-  items.map((item) => (typeof item === "string" ? item : item?.product || ""));
+const normalizeProductItems = (items = []) => items.map(normalizeProductItem);
 
 const ensureProductItems = (items = []) =>
-  items.length ? items : [""];
+  items.length ? normalizeProductItems(items) : [createEmptyProductItem()];
 
 const getValidProductItems = (items = []) =>
-  items.filter((item) => item);
+  normalizeProductItems(items).filter((item) => item.product);
 
 const updateIntegrationItems = (stateKey, container, items) => {
   if (!container) return;
@@ -560,17 +596,28 @@ const updateIntegrationItems = (stateKey, container, items) => {
   });
 };
 
+const formatProductItemLabel = (item) => {
+  const normalized = normalizeProductItem(item);
+  const parts = [normalized.product, normalized.size, normalized.color].filter(Boolean);
+  return parts.join(" · ");
+};
+
+const getPrimaryProductItem = (items = []) =>
+  normalizeProductItems(items).find((item) => item.product) || createEmptyProductItem();
+
 const formatProductItems = (items = []) =>
-  items
-    .filter((item) => item)
-    .map((item) => item)
+  normalizeProductItems(items)
+    .filter((item) => item.product)
+    .map((item) => formatProductItemLabel(item))
     .join(" / ");
 
-const getPrimaryItem = (items = []) =>
-  items.find((item) => item) || "—";
+const getPrimaryItem = (items = []) => {
+  const primary = getPrimaryProductItem(items);
+  return primary.product ? formatProductItemLabel(primary) : "—";
+};
 
 const formatExtraProductItems = (items = []) =>
-  formatProductItems(items.filter((_, index) => index > 0));
+  formatProductItems(normalizeProductItems(items).filter((_, index) => index > 0));
 
 const renderSettingsPanel = (title, key) => {
   const values = state.pools[key];
@@ -718,8 +765,11 @@ const renderIntegrationList = () => {
     .map((integration) => {
       const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
       const dateLabel = formatDateLabel(integration.date);
-      const primaryItem = getPrimaryItem(integration.items || []);
-      const extraCount = (integration.items || []).filter((_, index) => index > 0).length;
+      const normalizedItems = normalizeProductItems(integration.items || []);
+      const primaryItem = getPrimaryItem(normalizedItems);
+      const extraCount = normalizedItems.filter(
+        (item, index) => index > 0 && item.product
+      ).length;
       const extraLabel = extraCount ? ` + ещё ${extraCount}` : "";
       return `
         <div class="info-card" data-integration-id="${integration.id}">
@@ -752,13 +802,14 @@ const renderIntegrationStats = () => {
     state.statsFilters || {};
   const subfilter = qs("#stats-subfilter");
   const isSubfilterActive = subfilter && subfilter.classList.contains("is-open");
+  const fallbackMonth = selectedMonth || getLatestIntegrationMonth();
   const filtered = getBaseFilteredIntegrations().filter((integration) => {
     if (!canViewOverallStats && integration.agent !== profileLogin) {
       return false;
     }
     const month = getMonthKey(integration.date);
     if (!month) return false;
-    if (selectedMonth && month !== selectedMonth) return false;
+    if (fallbackMonth && month !== fallbackMonth) return false;
     if (isSubfilterActive && startDate && integration.date < startDate) return false;
     if (isSubfilterActive && endDate && integration.date > endDate) return false;
     return true;
@@ -783,7 +834,7 @@ const renderIntegrationStats = () => {
     if (isSubfilterActive && (startDate || endDate)) {
       return `${formatDateLabel(startDate)} — ${formatDateLabel(endDate)}`;
     }
-    return formatMonthLabel(selectedMonth);
+    return formatMonthLabel(fallbackMonth);
   })();
 
   countEl.textContent = formatInteger(totals.count);
@@ -860,7 +911,7 @@ const exportIntegrations = () => {
     const budget = parseNumber(integration.budget);
     const reach = parseNumber(integration.reach);
     const cpm = reach > 0 ? Math.round((budget / reach) * 1000) : "";
-    const primaryItem = getPrimaryItem(integration.items || []);
+    const primaryItem = getPrimaryProductItem(integration.items || []);
     const extraItems = formatExtraProductItems(integration.items || []);
     return [
       integration.date || "",
@@ -875,9 +926,9 @@ const exportIntegrations = () => {
       budget || "",
       cpm,
       integration.ugcStatus || "",
-      primaryItem || "",
-      "",
-      "",
+      primaryItem.product || "",
+      primaryItem.size || "",
+      primaryItem.color || "",
       extraItems,
       integration.comment || "",
       integration.track || "",
@@ -1381,7 +1432,7 @@ const initIntegrationsPage = () => {
     const productList = qs("#integration-products-list");
     updateIntegrationItems("integrationFormItems", productList, [
       ...state.integrationFormItems,
-      "",
+      createEmptyProductItem(),
     ]);
   });
 
