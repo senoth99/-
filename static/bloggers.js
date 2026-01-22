@@ -820,16 +820,31 @@ const renderIntegrationStats = () => {
       acc.budget += parseNumber(integration.budget);
       acc.reach += parseNumber(integration.reach);
       acc.count += 1;
-      const manager = integration.agent || "Не указан";
-      acc.managers[manager] = (acc.managers[manager] || 0) + 1;
       return acc;
     },
-    { budget: 0, reach: 0, count: 0, managers: {} }
+    { budget: 0, reach: 0, count: 0 }
   );
+
+  const managerTotals = filtered.reduce((acc, integration) => {
+    const manager = integration.agent || "Не указан";
+    if (!acc[manager]) {
+      acc[manager] = { integrations: 0, agreements: 0, total: 0 };
+    }
+    if (integration.date && integration.date < todayValue) {
+      acc[manager].integrations += 1;
+    } else {
+      acc[manager].agreements += 1;
+    }
+    acc[manager].total += 1;
+    return acc;
+  }, {});
 
   const cpm =
     totals.reach > 0 ? Math.round((totals.budget / totals.reach) * 1000) : null;
-  const bestManager = Object.entries(totals.managers).sort((a, b) => b[1] - a[1])[0];
+  const bestManager = Object.entries(managerTotals).sort((a, b) => {
+    if (b[1].total !== a[1].total) return b[1].total - a[1].total;
+    return b[1].integrations - a[1].integrations;
+  })[0];
   const periodLabel = (() => {
     if (isSubfilterActive && (startDate || endDate)) {
       return `${formatDateLabel(startDate)} — ${formatDateLabel(endDate)}`;
@@ -849,7 +864,7 @@ const renderIntegrationStats = () => {
     : "—";
   qs("#stats-cpm").textContent = cpm ? formatCurrency(cpm) : "—";
   qs("#stats-best-name").textContent = bestManager
-    ? `${bestManager[0]} · ${bestManager[1]} интеграций`
+    ? `${bestManager[0]} · ${bestManager[1].total} всего (${bestManager[1].integrations} интеграций, ${bestManager[1].agreements} договоренностей)`
     : "—";
   qs("#stats-best-period").textContent = `За период ${periodLabel}`;
   const scopeNote = qs("#stats-scope-note");
@@ -1138,23 +1153,45 @@ const openIntegrationDetail = (integrationId) => {
   const container = qs("#integration-detail-fields");
   if (!container) return;
   const fields = [
-    ["Блогер", "integration-detail-blogger", blogger?.name || ""],
-    ["Агент", "integration-detail-agent", integration.agent],
-    ["Дата", "integration-detail-date", integration.date, "date"],
-    ["Условия", "integration-detail-terms", integration.terms],
-    ["Формат", "integration-detail-format", integration.format],
-    ["Охваты", "integration-detail-reach", integration.reach, "number"],
-    ["Бюджет", "integration-detail-budget", integration.budget],
-    ["UGC", "integration-detail-ugc", integration.ugcStatus],
+    {
+      label: "Блогер",
+      id: "integration-detail-blogger",
+      value: blogger?.name || "",
+      readonly: true,
+    },
+    {
+      label: "Агент",
+      id: "integration-detail-agent",
+      value: integration.agent,
+      readonly: true,
+    },
+    { label: "Дата", id: "integration-detail-date", value: integration.date, type: "date" },
+    { label: "Условия", id: "integration-detail-terms", value: integration.terms },
+    { label: "Формат", id: "integration-detail-format", value: integration.format },
+    {
+      label: "Охваты",
+      id: "integration-detail-reach",
+      value: integration.reach,
+      type: "number",
+    },
+    { label: "Бюджет", id: "integration-detail-budget", value: integration.budget },
+    { label: "UGC", id: "integration-detail-ugc", value: integration.ugcStatus },
   ]
-    .map(([label, id, value, type]) => {
+    .map(({ label, id, value, type, readonly }) => {
       const inputType = type || "text";
-      const extraAttrs =
-        inputType === "date" ? ' lang="ru" placeholder="дд.мм.гг"' : "";
+      const extraAttrs = [];
+      if (inputType === "date") {
+        extraAttrs.push('lang="ru"', 'placeholder="дд.мм.гг"');
+      }
+      if (readonly) {
+        extraAttrs.push("readonly", "disabled");
+      }
       return `
         <label>
           ${label}
-          <input type="${inputType}" id="${id}" value="${value || ""}"${extraAttrs} />
+          <input type="${inputType}" id="${id}" value="${value || ""}" ${extraAttrs.join(
+            " "
+          )} />
         </label>
       `;
     })
@@ -1209,7 +1246,6 @@ const saveIntegrationDetail = () => {
   if (!activeIntegrationId) return;
   const integration = state.integrations.find((item) => item.id === activeIntegrationId);
   if (!integration) return;
-  integration.agent = qs("#integration-detail-agent")?.value.trim() || integration.agent;
   integration.date = qs("#integration-detail-date")?.value || integration.date;
   integration.terms = qs("#integration-detail-terms")?.value.trim() || integration.terms;
   integration.format = qs("#integration-detail-format")?.value.trim() || integration.format;
