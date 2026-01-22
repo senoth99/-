@@ -20,6 +20,7 @@ const state = {
       tiktok: "tiktok.com/@maria_fit",
       niche: "UGC",
       category: "Мидл",
+      status: "Новый",
       tags: ["UGC", "спорт"],
     },
     {
@@ -30,6 +31,7 @@ const state = {
       tiktok: "tiktok.com/@gromovlife",
       niche: "Лайфстайл",
       category: "Крупный",
+      status: "Новый",
       tags: ["лайфстайл", "мода"],
     },
     {
@@ -40,6 +42,7 @@ const state = {
       tiktok: "tiktok.com/@anna_ugc",
       niche: "UGC",
       category: "Микро",
+      status: "Новый",
       tags: ["UGC", "beauty"],
     },
   ],
@@ -51,14 +54,19 @@ const state = {
       date: "2024-01-15",
       terms: "Бартер",
       format: "UGC",
+      reach: "120000",
       budget: "0",
       ugcStatus: "Сдан",
       product: 'Джерси "Light Classic"',
       size: "M",
       color: "Белый",
-      extraProduct: 'Джерси "Light Classic"',
-      extraSize: "S",
-      extraColor: "Черный",
+      extraItems: [
+        {
+          product: 'Джерси "Light Classic"',
+          size: "S",
+          color: "Черный",
+        },
+      ],
       comment: "Снимаем три коротких ролика.",
       track: "102104",
       contacts: "@maria_fit",
@@ -70,14 +78,13 @@ const state = {
       date: "2024-01-20",
       terms: "КМ",
       format: "Инст-фотопост",
+      reach: "80000",
       budget: "45000",
       ugcStatus: "Не сдан",
       product: 'Джерси "Light Classic"',
       size: "L",
       color: "Черный",
-      extraProduct: "—",
-      extraSize: "—",
-      extraColor: "—",
+      extraItems: [],
       comment: "Обсуждается повторная интеграция.",
       track: "",
       contacts: "instagram.com/gromov_life",
@@ -128,6 +135,23 @@ const normalizeText = (value) =>
     .toLowerCase()
     .replace(/[^a-zа-я0-9]+/gi, " ")
     .trim();
+
+const parseNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const normalized = value.toString().replace(/\s+/g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const formatInteger = (value) =>
+  new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value || 0);
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 
 const levenshtein = (a, b) => {
   if (a === b) return 0;
@@ -200,13 +224,83 @@ const updateFormPools = () => {
   updateSelect(qs("#blogger-niche"), state.pools.niches);
   updateSelect(qs("#integration-format"), state.pools.formats);
   updateSelect(qs("#integration-product"), state.pools.products);
-  updateSelect(qs("#integration-extra-product"), state.pools.products);
   updateSelect(qs("#integration-color"), state.pools.colors);
-  updateSelect(qs("#integration-extra-color"), state.pools.colors);
   updateSelect(qs("#integration-size"), state.pools.sizes);
-  updateSelect(qs("#integration-extra-size"), state.pools.sizes);
   updatePoolFilters();
 };
+
+const MAX_EXTRA_ITEMS = 5;
+
+const createSelect = (options, value) => {
+  const select = document.createElement("select");
+  select.innerHTML = options
+    .map(
+      (option) =>
+        `<option value="${option}" ${
+          option === value ? "selected" : ""
+        }>${option}</option>`
+    )
+    .join("");
+  return select;
+};
+
+const addExtraItemRow = (container, item = {}) => {
+  if (!container) return;
+  if (container.querySelectorAll(".extra-product-row").length >= MAX_EXTRA_ITEMS) {
+    showNotification("Можно добавить не более 5 доп. изделий.", "info");
+    return;
+  }
+  const row = document.createElement("div");
+  row.className = "extra-product-row";
+  const productSelect = createSelect(
+    state.pools.products,
+    item.product || state.pools.products[0]
+  );
+  const sizeSelect = createSelect(
+    state.pools.sizes,
+    item.size || state.pools.sizes[0]
+  );
+  const colorSelect = createSelect(
+    state.pools.colors,
+    item.color || state.pools.colors[0]
+  );
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "icon-btn danger";
+  removeButton.textContent = "×";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+  });
+  row.append(productSelect, sizeSelect, colorSelect, removeButton);
+  container.appendChild(row);
+};
+
+const renderExtraItems = (container, items = []) => {
+  if (!container) return;
+  container.innerHTML = "";
+  items.forEach((item) => addExtraItemRow(container, item));
+};
+
+const collectExtraItems = (container) => {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(".extra-product-row")).map((row) => {
+    const selects = row.querySelectorAll("select");
+    return {
+      product: selects[0]?.value || "",
+      size: selects[1]?.value || "",
+      color: selects[2]?.value || "",
+    };
+  });
+};
+
+const formatExtraItems = (items = []) =>
+  items
+    .filter((item) => item?.product)
+    .map((item) => {
+      const details = [item.size, item.color].filter(Boolean).join(", ");
+      return details ? `${item.product} (${details})` : item.product;
+    })
+    .join(" / ");
 
 const renderSettingsPanel = (title, key) => {
   const values = state.pools[key];
@@ -318,24 +412,25 @@ const renderBloggerPicker = () => {
     .join("");
 };
 
-const renderIntegrationList = () => {
-  const list = qs("#integration-list");
-  if (!list) return;
+const getBaseFilteredIntegrations = () => {
   const query = qs("#integration-search")?.value || "";
   const format = qs("#integration-format-filter")?.value || "all";
   const terms = qs("#integration-terms-filter")?.value || "all";
   const date = qs("#integration-date-filter")?.value || "";
-  const filtered = state.integrations.filter((integration) => {
+  return state.integrations.filter((integration) => {
     const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
+    const extraItems = formatExtraItems(integration.extraItems);
     const haystack = [
       blogger?.name,
       blogger?.instagram,
       integration.format,
       integration.terms,
+      integration.reach,
       integration.budget,
       integration.product,
       integration.color,
       integration.size,
+      extraItems,
       integration.comment,
       integration.track,
     ].join(" ");
@@ -345,6 +440,12 @@ const renderIntegrationList = () => {
     const matchesDate = !date || integration.date === date;
     return matchesQuery && matchesFormat && matchesTerms && matchesDate;
   });
+};
+
+const renderIntegrationList = () => {
+  const list = qs("#integration-list");
+  if (!list) return;
+  const filtered = getBaseFilteredIntegrations();
 
   list.innerHTML = filtered
     .map((integration) => {
@@ -356,6 +457,7 @@ const renderIntegrationList = () => {
             <span>Формат: ${integration.format}</span>
             <span>Условия: ${integration.terms}</span>
             <span>Бюджет: ${integration.budget || "—"}</span>
+            <span>Охват: ${integration.reach ? formatInteger(parseNumber(integration.reach)) : "—"}</span>
           </div>
           <div class="pill-row">
             <span class="pill">${integration.product}</span>
@@ -368,6 +470,138 @@ const renderIntegrationList = () => {
       `;
     })
     .join("");
+};
+
+const getMonthKey = (dateValue) => {
+  if (!dateValue) return "";
+  return dateValue.slice(0, 7);
+};
+
+const renderIntegrationStats = () => {
+  const countEl = qs("#stats-count");
+  if (!countEl) return;
+  const startMonth = qs("#stats-month-start")?.value || "";
+  const endMonth = qs("#stats-month-end")?.value || "";
+  const filtered = getBaseFilteredIntegrations().filter((integration) => {
+    const month = getMonthKey(integration.date);
+    if (!month) return false;
+    if (startMonth && month < startMonth) return false;
+    if (endMonth && month > endMonth) return false;
+    return true;
+  });
+
+  const totals = filtered.reduce(
+    (acc, integration) => {
+      acc.budget += parseNumber(integration.budget);
+      acc.reach += parseNumber(integration.reach);
+      acc.count += 1;
+      const manager = integration.agent || "Не указан";
+      acc.managers[manager] = (acc.managers[manager] || 0) + 1;
+      return acc;
+    },
+    { budget: 0, reach: 0, count: 0, managers: {} }
+  );
+
+  const cpm =
+    totals.reach > 0 ? Math.round((totals.budget / totals.reach) * 1000) : null;
+  const bestManager = Object.entries(totals.managers).sort((a, b) => b[1] - a[1])[0];
+
+  countEl.textContent = formatInteger(totals.count);
+  qs("#stats-budget").textContent = totals.count
+    ? formatCurrency(totals.budget)
+    : "—";
+  qs("#stats-reach").textContent = totals.count
+    ? formatInteger(totals.reach)
+    : "—";
+  qs("#stats-cpm").textContent = cpm ? formatCurrency(cpm) : "—";
+  qs("#stats-best-manager").textContent = bestManager
+    ? `Лучший менеджер: ${bestManager[0]} (${bestManager[1]} интеграций)`
+    : "Лучший менеджер: —";
+};
+
+const refreshIntegrationViews = () => {
+  renderIntegrationList();
+  renderIntegrationStats();
+};
+
+const exportIntegrations = () => {
+  const headers = [
+    "Дата",
+    "Агент",
+    "Ссылка на соц. сеть",
+    "Статус блогера",
+    "Ниша",
+    "Категория",
+    "Условия сотрудничества",
+    "Формат интеграции",
+    "Охват",
+    "Бюджет",
+    "CPM",
+    "UGC",
+    "Изделие",
+    "Размер",
+    "Цвет",
+    "Доп. изделия",
+    "Комментарий",
+    "Трек-номер",
+    "Контакты",
+  ];
+
+  const rows = getBaseFilteredIntegrations().map((integration) => {
+    const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
+    const link =
+      blogger?.instagram || blogger?.telegram || blogger?.tiktok || "—";
+    const budget = parseNumber(integration.budget);
+    const reach = parseNumber(integration.reach);
+    const cpm = reach > 0 ? Math.round((budget / reach) * 1000) : "";
+    return [
+      integration.date || "",
+      integration.agent || "",
+      link,
+      blogger?.status || "Новый",
+      blogger?.niche || "",
+      blogger?.category || "",
+      integration.terms || "",
+      integration.format || "",
+      reach || "",
+      budget || "",
+      cpm,
+      integration.ugcStatus || "",
+      integration.product || "",
+      integration.size || "",
+      integration.color || "",
+      formatExtraItems(integration.extraItems || []),
+      integration.comment || "",
+      integration.track || "",
+      integration.contacts || "",
+    ];
+  });
+
+  const escapeValue = (value) => {
+    const stringValue = String(value ?? "");
+    if (stringValue.includes('"')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    if (stringValue.includes(";") || stringValue.includes("\n")) {
+      return `"${stringValue}"`;
+    }
+    return stringValue;
+  };
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeValue).join(";"))
+    .join("\n");
+
+  const blob = new Blob([`\ufeff${csvContent}`], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "integrations_export.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+  showNotification("Таблица интеграций сформирована.", "success");
 };
 
 const renderBloggerDetail = (bloggerId) => {
@@ -436,6 +670,7 @@ const addBlogger = () => {
     tiktok: qs("#blogger-tiktok")?.value.trim() || "",
     niche: qs("#blogger-niche")?.value || state.pools.niches[0],
     category: qs("#blogger-category")?.value || "Микро",
+    status: "Новый",
     tags: [qs("#blogger-niche")?.value || ""].filter(Boolean),
   };
   state.bloggers.unshift(blogger);
@@ -454,6 +689,8 @@ const openIntegrationModal = () => {
   selectedBloggerId = null;
   const input = qs("#integration-blogger");
   if (input) input.value = "";
+  const reach = qs("#integration-reach");
+  if (reach) reach.value = "";
   const agent = qs("#integration-agent");
   if (agent) agent.value = profileLogin;
   const date = qs("#integration-date");
@@ -461,6 +698,9 @@ const openIntegrationModal = () => {
     const today = new Date().toISOString().split("T")[0];
     date.value = today;
   }
+  const extraList = qs("#extra-products-list");
+  renderExtraItems(extraList, []);
+  qs("#blogger-picker")?.classList.add("hidden");
   openModal("integration-modal");
   renderBloggerPicker();
 };
@@ -474,21 +714,20 @@ const saveIntegration = () => {
     date: qs("#integration-date")?.value || "",
     terms: qs("#integration-terms")?.value || "",
     format: qs("#integration-format")?.value || "",
+    reach: qs("#integration-reach")?.value.trim() || "",
     budget: qs("#integration-budget")?.value.trim() || "",
     ugcStatus: qs("#integration-ugc")?.value || "",
     product: qs("#integration-product")?.value || "",
     size: qs("#integration-size")?.value || "",
     color: qs("#integration-color")?.value || "",
-    extraProduct: qs("#integration-extra-product")?.value || "",
-    extraSize: qs("#integration-extra-size")?.value || "",
-    extraColor: qs("#integration-extra-color")?.value || "",
+    extraItems: collectExtraItems(qs("#extra-products-list")),
     comment: qs("#integration-comment")?.value.trim() || "",
     track: qs("#integration-track")?.value.trim() || "",
     contacts: qs("#integration-contacts")?.value.trim() || "",
   };
   state.integrations.unshift(integration);
   closeModal("integration-modal");
-  renderIntegrationList();
+  refreshIntegrationViews();
   showNotification("Интеграция сохранена.", "success");
 };
 
@@ -501,21 +740,18 @@ const openIntegrationDetail = (integrationId) => {
     blogger?.name || "Интеграция";
   const container = qs("#integration-detail-fields");
   if (!container) return;
-  container.innerHTML = [
+  const fields = [
     ["Блогер", "integration-detail-blogger", blogger?.name || ""],
     ["Агент", "integration-detail-agent", integration.agent],
     ["Дата", "integration-detail-date", integration.date, "date"],
     ["Условия", "integration-detail-terms", integration.terms],
     ["Формат", "integration-detail-format", integration.format],
+    ["Охваты", "integration-detail-reach", integration.reach, "number"],
     ["Бюджет", "integration-detail-budget", integration.budget],
     ["UGC", "integration-detail-ugc", integration.ugcStatus],
     ["Изделие", "integration-detail-product", integration.product],
     ["Размер", "integration-detail-size", integration.size],
     ["Цвет", "integration-detail-color", integration.color],
-    ["Доп. изделие", "integration-detail-extra", integration.extraProduct],
-    ["Комментарий", "integration-detail-comment", integration.comment],
-    ["Трек номер", "integration-detail-track", integration.track],
-    ["Контакты", "integration-detail-contacts", integration.contacts],
   ]
     .map(([label, id, value, type]) => {
       const inputType = type || "text";
@@ -527,6 +763,32 @@ const openIntegrationDetail = (integrationId) => {
       `;
     })
     .join("");
+  container.innerHTML = `
+    ${fields}
+    <div class="full extra-products">
+      <div class="extra-products-header">
+        <span>Доп. изделия (до 5 шт)</span>
+        <button class="ghost small" type="button" id="add-extra-product-detail">+</button>
+      </div>
+      <div class="extra-products-list" id="extra-products-detail-list"></div>
+    </div>
+    <label class="full">
+      Комментарий
+      <input type="text" id="integration-detail-comment" value="${integration.comment || ""}" />
+    </label>
+    <label class="full">
+      Трек номер
+      <input type="text" id="integration-detail-track" value="${integration.track || ""}" />
+    </label>
+    <label class="full">
+      Контакты
+      <input type="text" id="integration-detail-contacts" value="${integration.contacts || ""}" />
+    </label>
+  `;
+  renderExtraItems(qs("#extra-products-detail-list"), integration.extraItems || []);
+  qs("#add-extra-product-detail")?.addEventListener("click", () => {
+    addExtraItemRow(qs("#extra-products-detail-list"));
+  });
   openModal("integration-detail-modal");
 };
 
@@ -538,20 +800,20 @@ const saveIntegrationDetail = () => {
   integration.date = qs("#integration-detail-date")?.value || integration.date;
   integration.terms = qs("#integration-detail-terms")?.value.trim() || integration.terms;
   integration.format = qs("#integration-detail-format")?.value.trim() || integration.format;
+  integration.reach = qs("#integration-detail-reach")?.value.trim() || integration.reach;
   integration.budget = qs("#integration-detail-budget")?.value.trim() || integration.budget;
   integration.ugcStatus = qs("#integration-detail-ugc")?.value.trim() || integration.ugcStatus;
   integration.product = qs("#integration-detail-product")?.value.trim() || integration.product;
   integration.size = qs("#integration-detail-size")?.value.trim() || integration.size;
   integration.color = qs("#integration-detail-color")?.value.trim() || integration.color;
-  integration.extraProduct =
-    qs("#integration-detail-extra")?.value.trim() || integration.extraProduct;
+  integration.extraItems = collectExtraItems(qs("#extra-products-detail-list"));
   integration.comment =
     qs("#integration-detail-comment")?.value.trim() || integration.comment;
   integration.track = qs("#integration-detail-track")?.value.trim() || integration.track;
   integration.contacts =
     qs("#integration-detail-contacts")?.value.trim() || integration.contacts;
   closeModal("integration-detail-modal");
-  renderIntegrationList();
+  refreshIntegrationViews();
   showNotification("Изменения по интеграции сохранены.", "success");
 };
 
@@ -697,10 +959,53 @@ const initIntegrationsPage = () => {
   if (!qs("#integrations-actions")) return;
   updateFormPools();
   renderBloggerPicker();
-  renderIntegrationList();
+  refreshIntegrationViews();
+
+  const monthStart = qs("#stats-month-start");
+  const monthEnd = qs("#stats-month-end");
+  const availableMonths = state.integrations
+    .map((integration) => getMonthKey(integration.date))
+    .filter(Boolean)
+    .sort();
+  if (availableMonths.length) {
+    if (monthStart && !monthStart.value) {
+      monthStart.value = availableMonths[0];
+    }
+    if (monthEnd && !monthEnd.value) {
+      monthEnd.value = availableMonths[availableMonths.length - 1];
+    }
+  }
+  [monthStart, monthEnd].forEach((field) => {
+    field?.addEventListener("change", renderIntegrationStats);
+  });
+  renderIntegrationStats();
 
   qs("#open-integration-modal")?.addEventListener("click", openIntegrationModal);
   qs("#save-integration")?.addEventListener("click", saveIntegration);
+
+  const pickerPanel = qs("#blogger-picker");
+  const pickerInput = qs("#integration-blogger");
+  const openPicker = () => {
+    pickerPanel?.classList.remove("hidden");
+    renderBloggerPicker();
+    qs("#blogger-picker-search")?.focus();
+  };
+  const closePicker = () => {
+    pickerPanel?.classList.add("hidden");
+  };
+  pickerInput?.addEventListener("click", openPicker);
+  document.addEventListener("click", (event) => {
+    if (!pickerPanel || pickerPanel.classList.contains("hidden")) return;
+    const target = event.target;
+    if (
+      pickerPanel.contains(target) ||
+      pickerInput?.contains(target) ||
+      target.closest("#blogger-picker")
+    ) {
+      return;
+    }
+    closePicker();
+  });
 
   qs("#blogger-picker-search")?.addEventListener("input", renderBloggerPicker);
   qs("#blogger-picker-list")?.addEventListener("click", (event) => {
@@ -712,6 +1017,7 @@ const initIntegrationsPage = () => {
     if (blogger && qs("#integration-blogger")) {
       qs("#integration-blogger").value = blogger.name;
     }
+    closePicker();
   });
 
   qs("#open-blogger-from-picker")?.addEventListener("click", () => {
@@ -725,14 +1031,18 @@ const initIntegrationsPage = () => {
     renderBloggerPicker();
   });
 
+  qs("#add-extra-product")?.addEventListener("click", () => {
+    addExtraItemRow(qs("#extra-products-list"));
+  });
+
   [
     "#integration-search",
     "#integration-format-filter",
     "#integration-terms-filter",
     "#integration-date-filter",
   ].forEach((selector) => {
-    qs(selector)?.addEventListener("input", renderIntegrationList);
-    qs(selector)?.addEventListener("change", renderIntegrationList);
+    qs(selector)?.addEventListener("input", refreshIntegrationViews);
+    qs(selector)?.addEventListener("change", refreshIntegrationViews);
   });
 
   qs("#integration-list")?.addEventListener("click", (event) => {
@@ -746,7 +1056,7 @@ const initIntegrationsPage = () => {
 
   qs("#export-integrations")?.addEventListener("click", () => {
     if (qs("#export-integrations")?.disabled) return;
-    showNotification("Выгрузка таблицы будет доступна в следующем обновлении.", "info");
+    exportIntegrations();
   });
 };
 
