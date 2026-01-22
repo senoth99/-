@@ -243,11 +243,9 @@ const setStatsDateDefaults = () => {
   const endInput = qs("#stats-date-end");
   const endDisplay = qs("#stats-date-end-display");
   const currentMonth = getCurrentMonthValue();
-  const latestMonth = getLatestIntegrationMonth();
-  const defaultMonth = latestMonth || currentMonth;
 
   if (monthInput && !monthInput.value) {
-    monthInput.value = defaultMonth;
+    monthInput.value = currentMonth;
   }
   if (monthDisplay) {
     monthDisplay.value = formatMonthDisplay(monthInput?.value || "");
@@ -358,6 +356,8 @@ const initStatsDatePickers = () => {
     });
 
     panel.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       const nav = event.target.closest(".datepicker-nav");
       if (nav) {
         const dir = Number(nav.dataset.dir || 0);
@@ -808,7 +808,7 @@ const renderIntegrationStats = () => {
     state.statsFilters || {};
   const subfilter = qs("#stats-subfilter");
   const isSubfilterActive = subfilter && subfilter.classList.contains("is-open");
-  const fallbackMonth = selectedMonth || getLatestIntegrationMonth();
+  const fallbackMonth = selectedMonth || getCurrentMonthValue();
   const filtered = getBaseFilteredIntegrations().filter((integration) => {
     if (!canViewOverallStats && integration.agent !== profileLogin) {
       return false;
