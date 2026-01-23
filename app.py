@@ -580,7 +580,7 @@ def verify_password(password, password_hash):
 
 
 CDEK_TOKEN_URL = "https://api.cdek.ru/v2/oauth/token"
-CDEK_TRACKING_URL = "https://api.cdek.ru/v2/trackings"
+CDEK_STATUS_URL = "https://api.cdek.ru/v2/orders/status"
 CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
 CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
 _cdek_token_cache = {"token": None, "expires_at": None}
@@ -659,21 +659,43 @@ def fetch_cdek_status(track_number: str):
     token = _get_cdek_token()
     if not token:
         return None
-    query = urllib.parse.urlencode({"track_number": track_number})
+    body = json.dumps(
+        {
+            "orders": [
+                {"cdek_number": track_number}
+            ]
+        }
+    ).encode("utf-8")
     request_obj = urllib.request.Request(
-        f"{CDEK_TRACKING_URL}?{query}", method="GET"
+        CDEK_STATUS_URL,
+        data=body,
+        method="POST",
     )
     request_obj.add_header("Authorization", f"Bearer {token}")
+    request_obj.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(request_obj, timeout=20) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception:
-        logger.exception("Failed to fetch CDEK tracking status.")
+        logger.exception("Failed to fetch CDEK order status.")
         return None
-    status_data = _extract_cdek_status(payload)
-    if not status_data:
-        logger.warning("CDEK tracking response missing status data.")
-    return status_data
+
+    orders = payload.get("orders", [])
+    if not orders:
+        return None
+
+    statuses = orders[0].get("statuses", [])
+    if not statuses:
+        return None
+
+    latest = max(statuses, key=lambda x: x.get("date_time", ""))
+
+    return {
+        "status": latest.get("name"),
+        "code": latest.get("code"),
+        "location": latest.get("city"),
+        "timestamp": latest.get("date_time"),
+    }
 
 
 def update_shipment_from_cdek(conn, shipment_row):
