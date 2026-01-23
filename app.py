@@ -1649,6 +1649,34 @@ def add_blogger():
     return jsonify({"ok": True})
 
 
+@app.put("/api/bloggers/<int:blogger_id>")
+def update_blogger(blogger_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    name = payload.get("name", "").strip()
+    platform = payload.get("platform", "").strip()
+    profile_url = payload.get("profile_url", "").strip()
+    notes = payload.get("notes", "").strip()
+
+    if not name:
+        return jsonify({"error": "Введите имя блогера"}), 400
+
+    with get_db() as conn:
+        result = conn.execute(
+            """
+            UPDATE bloggers
+            SET name = ?, platform = ?, profile_url = ?, notes = ?
+            WHERE id = ?
+            """,
+            (name, platform, profile_url, notes, blogger_id),
+        )
+        if result.rowcount == 0:
+            return jsonify({"error": "Блогер не найден"}), 404
+    return jsonify({"ok": True})
+
+
 @app.delete("/api/bloggers/<int:blogger_id>")
 def delete_blogger(blogger_id):
     guard = require_admin()
