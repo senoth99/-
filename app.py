@@ -267,6 +267,30 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bloggers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                platform TEXT,
+                profile_url TEXT,
+                notes TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS blogger_integrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blogger_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                data TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(blogger_id) REFERENCES bloggers(id)
+            )
+            """
+        )
         columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(shipments)").fetchall()
         }
@@ -621,7 +645,6 @@ def bloggers():
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
-        profile_login=get_profile_login(),
         access_map=access_map,
     )
 
@@ -641,7 +664,6 @@ def bloggers_integrations():
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
-        profile_login=get_profile_login(),
         access_map=access_map,
     )
 
@@ -661,7 +683,6 @@ def bloggers_base():
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
-        profile_login=get_profile_login(),
         access_map=access_map,
     )
 
@@ -681,7 +702,6 @@ def bloggers_settings():
         role=role,
         role_label=get_role_label(role),
         profile_name=get_profile_name(),
-        profile_login=get_profile_login(),
         access_map=access_map,
     )
 
@@ -1589,6 +1609,133 @@ def delete_knowledge(item_id):
         if not can_manage_record(row["created_by_login"]):
             return jsonify({"error": "forbidden"}), 403
         conn.execute("DELETE FROM knowledge_items WHERE id = ?", (item_id,))
+    return jsonify({"ok": True})
+
+
+@app.get("/api/bloggers")
+def list_bloggers():
+    guard = require_page_access("bloggers", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM bloggers ORDER BY created_at DESC"
+        ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.post("/api/bloggers")
+def add_blogger():
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    name = payload.get("name", "").strip()
+    platform = payload.get("platform", "").strip()
+    profile_url = payload.get("profile_url", "").strip()
+    notes = payload.get("notes", "").strip()
+
+    if not name:
+        return jsonify({"error": "Введите имя блогера"}), 400
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO bloggers (name, platform, profile_url, notes, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (name, platform, profile_url, notes, datetime.utcnow().isoformat()),
+        )
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/bloggers/<int:blogger_id>")
+def delete_blogger(blogger_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    with get_db() as conn:
+        conn.execute("DELETE FROM blogger_integrations WHERE blogger_id = ?", (blogger_id,))
+        result = conn.execute("DELETE FROM bloggers WHERE id = ?", (blogger_id,))
+        if result.rowcount == 0:
+            return jsonify({"error": "Блогер не найден"}), 404
+    return jsonify({"ok": True})
+
+
+@app.get("/api/bloggers/<int:blogger_id>/integrations")
+def get_blogger_integrations(blogger_id):
+    guard = require_page_access("bloggers", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM blogger_integrations WHERE blogger_id = ?",
+            (blogger_id,),
+        ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.post("/api/bloggers/<int:blogger_id>/integrations")
+def add_blogger_integration(blogger_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    type_ = payload.get("type", "").strip()
+    data = payload.get("data", "").strip()
+
+    if not type_:
+        return jsonify({"error": "Укажите тип интеграции"}), 400
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO blogger_integrations (blogger_id, type, data, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (blogger_id, type_, data, datetime.utcnow().isoformat()),
+        )
+    return jsonify({"ok": True})
+
+
+@app.post("/api/bloggers/integrations/<int:integration_id>")
+def update_blogger_integration(integration_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    type_ = payload.get("type", "").strip()
+    data = payload.get("data", "").strip()
+
+    if not type_:
+        return jsonify({"error": "Укажите тип интеграции"}), 400
+
+    with get_db() as conn:
+        result = conn.execute(
+            """
+            UPDATE blogger_integrations
+            SET type = ?, data = ?
+            WHERE id = ?
+            """,
+            (type_, data, integration_id),
+        )
+        if result.rowcount == 0:
+            return jsonify({"error": "Интеграция не найдена"}), 404
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/bloggers/integrations/<int:integration_id>")
+def delete_blogger_integration(integration_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    with get_db() as conn:
+        result = conn.execute(
+            "DELETE FROM blogger_integrations WHERE id = ?",
+            (integration_id,),
+        )
+        if result.rowcount == 0:
+            return jsonify({"error": "Интеграция не найдена"}), 404
     return jsonify({"ok": True})
 
 
