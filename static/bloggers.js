@@ -103,11 +103,11 @@ const normalizeSocialUrl = (value, platform) => {
 
 const renderSocialRow = (label, value, platform) => {
   if (!value) {
-    return `<div><strong>${label}</strong><span>—</span></div>`;
+    return "";
   }
   const url = normalizeSocialUrl(value, platform);
   if (!url) {
-    return `<div><strong>${label}</strong></div>`;
+    return "";
   }
   return `<div><a class="social-link" href="${url}" target="_blank" rel="noopener noreferrer"><strong>${label}</strong></a></div>`;
 };
@@ -819,15 +819,19 @@ const renderBloggerList = () => {
   });
 
   list.innerHTML = filtered
-    .map(
-      (blogger) => `
+    .map((blogger) => {
+      const socials = [
+        blogger.instagram,
+        blogger.telegram,
+        blogger.tiktok,
+        blogger.twitch,
+      ].filter(Boolean);
+      const socialsMarkup = socials.map((value) => `<span>${value}</span>`).join("");
+      return `
         <div class="info-card" data-blogger-id="${blogger.id}">
           <h4>${blogger.name}</h4>
           <div class="info-meta">
-            <span>${blogger.instagram}</span>
-            <span>${blogger.telegram}</span>
-            <span>${blogger.tiktok}</span>
-            <span>${blogger.twitch}</span>
+            ${socialsMarkup}
           </div>
           <div class="pill-row">
             <span class="pill">${blogger.niche}</span>
@@ -837,8 +841,8 @@ const renderBloggerList = () => {
               .join("")}
           </div>
         </div>
-      `
-    )
+      `;
+    })
     .join("");
 };
 
@@ -1153,7 +1157,9 @@ const renderBloggerDetail = (bloggerId) => {
     renderSocialRow("TikTok", blogger.tiktok, "tiktok"),
     renderSocialRow("Twitch", blogger.twitch, "twitch"),
     `<div><strong>Теги</strong>${(blogger.tags || []).join(", ") || "—"}</div>`,
-  ].join("");
+  ]
+    .filter(Boolean)
+    .join("");
 
   const integrations = state.integrations.filter(
     (integration) => integration.bloggerId === bloggerId
@@ -1385,6 +1391,7 @@ const openIntegrationDetail = (integrationId, stacked = false) => {
       id: "integration-detail-blogger",
       value: blogger?.name || "",
       readonly: true,
+      isLink: true,
     },
     {
       label: "Агент",
@@ -1404,7 +1411,18 @@ const openIntegrationDetail = (integrationId, stacked = false) => {
     { label: "Бюджет", id: "integration-detail-budget", value: integration.budget },
     { label: "UGC", id: "integration-detail-ugc", value: integration.ugcStatus },
   ]
-    .map(({ label, id, value, type, readonly }) => {
+    .map(({ label, id, value, type, readonly, isLink }) => {
+      if (isLink) {
+        const disabledAttr = blogger?.id ? "" : "disabled";
+        return `
+          <label>
+            ${label}
+            <button type="button" class="inline-link" id="${id}" ${disabledAttr}>
+              ${value || "—"}
+            </button>
+          </label>
+        `;
+      }
       const inputType = type || "text";
       const extraAttrs = [];
       if (inputType === "date") {
@@ -1465,6 +1483,13 @@ const openIntegrationDetail = (integrationId, stacked = false) => {
   const deleteButton = qs("#delete-integration");
   if (deleteButton) {
     deleteButton.classList.toggle("hidden", !canViewOverallStats);
+  }
+  const bloggerButton = qs("#integration-detail-blogger");
+  if (bloggerButton && blogger?.id) {
+    bloggerButton.addEventListener("click", () => {
+      renderBloggerDetail(blogger.id);
+      openModal("blogger-detail-modal", true);
+    });
   }
   openModal("integration-detail-modal", stacked);
 };
@@ -1675,6 +1700,16 @@ const initBasePage = () => {
 
   qs("#edit-blogger")?.addEventListener("click", openEditBloggerModal);
   qs("#delete-blogger")?.addEventListener("click", deleteBlogger);
+
+  qs("#blogger-detail-integrations")?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-integration-id]");
+    if (!card) return;
+    const integrationId = Number(card.dataset.integrationId);
+    openIntegrationDetail(integrationId, true);
+  });
+
+  qs("#save-integration-detail")?.addEventListener("click", saveIntegrationDetail);
+  qs("#delete-integration")?.addEventListener("click", deleteIntegration);
 };
 
 const initSettingsPage = () => {
