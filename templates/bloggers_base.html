@@ -169,6 +169,26 @@
       </div>
     </div>
 
+    <div class="modal hidden" id="integration-detail-modal">
+      <div class="modal-card wide popup-card popup">
+        <div class="modal-header popup-header">
+          <div class="title">
+            <h3 id="integration-detail-title">Интеграция</h3>
+            <p class="modal-subtitle">Карточка интеграции с возможностью редактирования.</p>
+          </div>
+          <button class="icon-btn close" data-close-modal="integration-detail-modal">✕</button>
+        </div>
+        <div class="popup-body">
+          <div class="form-grid" id="integration-detail-fields"></div>
+          <div class="card-actions">
+            <button class="ghost danger hidden" id="delete-integration">Удалить интеграцию</button>
+            <button class="secondary" data-close-modal="integration-detail-modal">Закрыть</button>
+            <button class="primary" id="save-integration-detail">Сохранить изменения</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
     <script src="/static/bloggers.js"></script>

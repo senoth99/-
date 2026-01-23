@@ -2770,6 +2770,28 @@ td {
   text-decoration: none;
 }
 
+.inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #4338ca;
+  cursor: pointer;
+  text-align: left;
+}
+
+.inline-link:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.inline-link:not(:disabled):hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .filter-bar {
     grid-template-columns: 1fr;
