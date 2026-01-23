@@ -167,6 +167,39 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                assignee TEXT,
+                deadline TEXT,
+                created_by_name TEXT,
+                created_by_login TEXT,
+                created_by_role TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS knowledge_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                section TEXT,
+                owner TEXT,
+                tag TEXT,
+                created_by_name TEXT,
+                created_by_login TEXT,
+                created_by_role TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(shipments)").fetchall()
         }
@@ -378,6 +411,22 @@ def resolve_shipment_status():
         "timestamp": datetime.utcnow().isoformat(),
         "code": "MANUAL",
     }
+
+
+def get_actor_snapshot():
+    return {
+        "name": get_profile_name(),
+        "login": get_profile_login(),
+        "role": get_role(),
+    }
+
+
+def can_manage_record(owner_login):
+    if get_role() == ROLE_ADMIN:
+        return True
+    if not owner_login:
+        return False
+    return owner_login == get_profile_login()
 
 
 app.before_request(require_auth)
@@ -622,12 +671,20 @@ def logout():
 
 @app.get("/api/employees")
 def list_employees():
-    if get_role() != ROLE_ADMIN:
+    public_view = request.args.get("public") == "true"
+    if get_role() != ROLE_ADMIN and not public_view:
         return jsonify({"error": "forbidden"}), 403
     with get_db() as conn:
-        rows = conn.execute(
-            "SELECT id, login, name, created_at FROM employees ORDER BY created_at DESC"
-        ).fetchall()
+        if public_view:
+            rows = conn.execute(
+                "SELECT id, name FROM employees ORDER BY created_at DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, login, name, created_at FROM employees ORDER BY created_at DESC"
+            ).fetchall()
+    if public_view:
+        return jsonify([dict(row) for row in rows])
     employees = []
     with get_db() as conn:
         for row in rows:
@@ -729,6 +786,154 @@ def delete_employee(employee_id):
         result = conn.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
     if result.rowcount == 0:
         return jsonify({"error": "Профиль не найден"}), 404
+    return jsonify({"ok": True})
+
+
+@app.get("/api/tasks")
+def list_tasks():
+    guard = require_page_access("tasks", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, status, priority, assignee, deadline,
+                   created_by_name, created_by_login, created_by_role,
+                   created_at, updated_at
+            FROM tasks
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.post("/api/tasks")
+def create_task():
+    guard = require_page_access("tasks", redirect_on_fail=False)
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    title = (payload.get("title") or "").strip()
+    status = (payload.get("status") or "").strip()
+    priority = (payload.get("priority") or "").strip()
+    assignee = (payload.get("assignee") or "").strip()
+    deadline = (payload.get("deadline") or "").strip() or None
+    if not title or not status or not priority:
+        return jsonify({"error": "Заполните название, статус и приоритет"}), 400
+    created_at = datetime.utcnow().isoformat()
+    actor = get_actor_snapshot()
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO tasks
+            (title, status, priority, assignee, deadline,
+             created_by_name, created_by_login, created_by_role, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                title,
+                status,
+                priority,
+                assignee,
+                deadline,
+                actor["name"],
+                actor["login"],
+                actor["role"],
+                created_at,
+                created_at,
+            ),
+        )
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/tasks/<int:task_id>")
+def delete_task(task_id):
+    guard = require_page_access("tasks", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT created_by_login FROM tasks WHERE id = ?",
+            (task_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Задача не найдена"}), 404
+        if not can_manage_record(row["created_by_login"]):
+            return jsonify({"error": "forbidden"}), 403
+        conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    return jsonify({"ok": True})
+
+
+@app.get("/api/knowledge")
+def list_knowledge():
+    guard = require_page_access("knowledge", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, section, owner, tag,
+                   created_by_name, created_by_login, created_by_role,
+                   created_at, updated_at
+            FROM knowledge_items
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.post("/api/knowledge")
+def create_knowledge():
+    guard = require_page_access("knowledge", redirect_on_fail=False)
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    title = (payload.get("title") or "").strip()
+    section = (payload.get("section") or "").strip()
+    owner = (payload.get("owner") or "").strip()
+    tag = (payload.get("tag") or "").strip()
+    if not title:
+        return jsonify({"error": "Заполните название документа"}), 400
+    created_at = datetime.utcnow().isoformat()
+    actor = get_actor_snapshot()
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO knowledge_items
+            (title, section, owner, tag,
+             created_by_name, created_by_login, created_by_role, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                title,
+                section,
+                owner,
+                tag,
+                actor["name"],
+                actor["login"],
+                actor["role"],
+                created_at,
+                created_at,
+            ),
+        )
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/knowledge/<int:item_id>")
+def delete_knowledge(item_id):
+    guard = require_page_access("knowledge", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT created_by_login FROM knowledge_items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Документ не найден"}), 404
+        if not can_manage_record(row["created_by_login"]):
+            return jsonify({"error": "forbidden"}), 403
+        conn.execute("DELETE FROM knowledge_items WHERE id = ?", (item_id,))
     return jsonify({"ok": True})
 
 
