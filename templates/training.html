@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER LMS — Обучение</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body training-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="menu-panel">
+          <div class="menu-stack">
+            <div class="menu-card menu-card--wide menu-card--static lms-hero">
+              <div>
+                <span class="lms-pill">CASHER LMS</span>
+                <h2>Обучение команды</h2>
+                <p class="subtitle">
+                  Курсы, тесты и персональный прогресс для каждого сотрудника.
+                </p>
+                <div class="lms-hero-badges" id="lms-badges"></div>
+              </div>
+              <div class="lms-hero-stats">
+                <div class="lms-stat">
+                  <span class="lms-stat-label">Ваш XP</span>
+                  <span class="lms-stat-value" id="lms-xp">0</span>
+                </div>
+                <div class="lms-stat">
+                  <span class="lms-stat-label">Курсов пройдено</span>
+                  <span class="lms-stat-value" id="lms-completed">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="menu-grid">
+              {% if role == "admin" %}
+                <a class="menu-card" href="/training/settings">
+                  <div class="menu-icon">⚙️</div>
+                  <div>
+                    <h3>Настройки курсов</h3>
+                    <p class="subtitle">
+                      Конструктор программ, доступы и аналитика.
+                    </p>
+                  </div>
+                  <span class="menu-cta">Открыть →</span>
+                </a>
+              {% else %}
+                <div class="menu-card menu-card--disabled" aria-disabled="true">
+                  <div class="menu-icon">⚙️</div>
+                  <div>
+                    <h3>Настройки курсов</h3>
+                    <p class="subtitle">
+                      Доступно только администраторам.
+                    </p>
+                  </div>
+                  <span class="menu-cta">Недоступно</span>
+                </div>
+              {% endif %}
+              <a class="menu-card" href="/profile">
+                <div class="menu-icon">👤</div>
+                <div>
+                  <h3>Профиль сотрудника</h3>
+                  <p class="subtitle">Бейджи, XP и персональные настройки.</p>
+                </div>
+                <span class="menu-cta">Открыть →</span>
+              </a>
+            </div>
+
+            <div class="menu-card menu-card--wide menu-card--static lms-filter">
+              <div>
+                <h3>Категории обучения</h3>
+                <p class="subtitle">
+                  Отфильтруйте программы по направлению.
+                </p>
+              </div>
+              <div class="lms-filter-actions" id="lms-filters"></div>
+            </div>
+
+            <div class="lms-courses" id="lms-courses"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/training.js"></script>
+  </body>
+</html>

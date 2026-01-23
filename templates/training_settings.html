@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER LMS — Настройки</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body training-settings-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/training">К обучению</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="menu-panel">
+          <div class="menu-stack">
+            <div class="menu-card menu-card--wide menu-card--static lms-builder">
+              <div class="settings-header">
+                <div>
+                  <h2>Конструктор курсов</h2>
+                  <p class="subtitle">
+                    Создавайте программы, модули, уроки и тесты в едином стиле.
+                  </p>
+                </div>
+              </div>
+              <div class="lms-form">
+                <div class="lms-form-grid">
+                  <input type="text" id="course-title" placeholder="Название курса" />
+                  <input type="text" id="course-category" placeholder="Категория" />
+                  <input type="text" id="course-level" placeholder="Уровень (например, базовый)" />
+                  <input type="text" id="course-duration" placeholder="Длительность (например, 3 недели)" />
+                  <input type="number" id="course-xp" placeholder="XP за прохождение" />
+                  <label class="lms-checkbox">
+                    <input type="checkbox" id="course-public" checked />
+                    <span>Доступно всем сотрудникам</span>
+                  </label>
+                </div>
+                <textarea
+                  id="course-description"
+                  placeholder="Описание курса"
+                  rows="3"
+                ></textarea>
+                <div class="lms-outline">
+                  <div class="lms-outline-header">
+                    <h3>Структура курса</h3>
+                    <button class="secondary" id="add-topic" type="button">
+                      + Добавить тему
+                    </button>
+                  </div>
+                  <div id="course-outline"></div>
+                </div>
+                <div class="lms-form-actions">
+                  <button class="primary" id="course-save">Создать курс</button>
+                  <span class="error" id="course-error"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="menu-card menu-card--wide menu-card--static lms-course-list">
+              <div class="settings-header">
+                <div>
+                  <h2>Активные курсы</h2>
+                  <p class="subtitle">
+                    Управляйте доступами и отслеживайте прогресс сотрудников.
+                  </p>
+                </div>
+              </div>
+              <div id="course-admin-list"></div>
+            </div>
+
+            <div class="menu-card menu-card--wide menu-card--static lms-profiles">
+              <div class="settings-header">
+                <div>
+                  <h2>Профили и геймификация</h2>
+                  <p class="subtitle">
+                    Просматривайте аватары и XP всех сотрудников.
+                  </p>
+                </div>
+              </div>
+              <div class="lms-employee-grid" id="lms-employee-list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/training_settings.js"></script>
+  </body>
+</html>

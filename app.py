@@ -31,6 +31,7 @@ ACCESS_PAGES = [
     {"key": "operations", "label": "Операционная работа", "path": "/operations"},
     {"key": "tasks", "label": "Трекер задач", "path": "/operations/tasks"},
     {"key": "knowledge", "label": "База знаний", "path": "/operations/knowledge"},
+    {"key": "training", "label": "Обучение", "path": "/training"},
     {"key": "locations", "label": "Точки продаж", "path": "/locations"},
     {"key": "bloggers", "label": "Работа с блогерами", "path": "/bloggers"},
     {
@@ -200,6 +201,72 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profiles (
+                login TEXT PRIMARY KEY,
+                avatar_url TEXT,
+                xp INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS courses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                category TEXT,
+                level TEXT,
+                duration TEXT,
+                xp_value INTEGER NOT NULL DEFAULT 0,
+                is_public INTEGER NOT NULL DEFAULT 1,
+                outline_json TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS course_access (
+                course_id INTEGER NOT NULL,
+                login TEXT NOT NULL,
+                allowed INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(course_id, login),
+                FOREIGN KEY(course_id) REFERENCES courses(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS course_progress (
+                course_id INTEGER NOT NULL,
+                login TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'not_started',
+                current_topic TEXT,
+                current_lesson TEXT,
+                current_test TEXT,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                PRIMARY KEY(course_id, login),
+                FOREIGN KEY(course_id) REFERENCES courses(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS course_badges (
+                course_id INTEGER NOT NULL,
+                login TEXT NOT NULL,
+                badge_label TEXT NOT NULL,
+                xp_awarded INTEGER NOT NULL DEFAULT 0,
+                awarded_at TEXT NOT NULL,
+                PRIMARY KEY(course_id, login),
+                FOREIGN KEY(course_id) REFERENCES courses(id)
+            )
+            """
+        )
         columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(shipments)").fetchall()
         }
@@ -222,6 +289,15 @@ def init_db():
         }
         if "login" not in employee_columns:
             conn.execute("ALTER TABLE employees ADD COLUMN login TEXT")
+        profile_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(profiles)").fetchall()
+        }
+        if "avatar_url" not in profile_columns:
+            conn.execute("ALTER TABLE profiles ADD COLUMN avatar_url TEXT")
+        if "xp" not in profile_columns:
+            conn.execute("ALTER TABLE profiles ADD COLUMN xp INTEGER NOT NULL DEFAULT 0")
+        if "updated_at" not in profile_columns:
+            conn.execute("ALTER TABLE profiles ADD COLUMN updated_at TEXT")
         conn.execute(
             """
             UPDATE employees
@@ -232,9 +308,20 @@ def init_db():
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_login ON employees(login)"
         )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_course_access_login ON course_access(login)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_course_progress_login ON course_progress(login)"
+        )
         employee_ids = conn.execute("SELECT id FROM employees").fetchall()
         for row in employee_ids:
             ensure_employee_access(conn, row["id"])
+        employee_logins = conn.execute("SELECT login FROM employees").fetchall()
+        for row in employee_logins:
+            if row["login"]:
+                ensure_profile(conn, row["login"])
+        ensure_profile(conn, ADMIN_LOGIN)
 
 
 def normalize_columns(columns):
@@ -341,6 +428,9 @@ def require_auth():
         "/operations/tasks",
         "/operations/knowledge",
         "/settings",
+        "/training",
+        "/training/settings",
+        "/profile",
         "/no-access",
     }
     if request.path.startswith("/static"):
@@ -394,6 +484,50 @@ def require_admin():
     if get_role() != ROLE_ADMIN:
         return jsonify({"error": "forbidden"}), 403
     return None
+
+
+def ensure_profile(conn, login):
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO profiles (login, avatar_url, xp, updated_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (login, "", 0, now),
+    )
+
+
+def get_profile_data(conn, login):
+    ensure_profile(conn, login)
+    row = conn.execute(
+        "SELECT login, avatar_url, xp FROM profiles WHERE login = ?",
+        (login,),
+    ).fetchone()
+    return dict(row) if row else {"login": login, "avatar_url": "", "xp": 0}
+
+
+def get_employee_name_by_login(conn, login):
+    if login == ADMIN_LOGIN:
+        return "Админ"
+    row = conn.execute("SELECT name FROM employees WHERE login = ?", (login,)).fetchone()
+    if row:
+        return row["name"]
+    return login
+
+
+def get_course_outline_summary(outline):
+    topics = outline or []
+    topic_count = len(topics)
+    lesson_count = 0
+    test_count = 0
+    for topic in topics:
+        lesson_count += len(topic.get("lessons", []) or [])
+        test_count += len(topic.get("tests", []) or [])
+    return {
+        "topics": topic_count,
+        "lessons": lesson_count,
+        "tests": test_count,
+    }
 
 
 def hash_password(password):
@@ -605,6 +739,57 @@ def operations_knowledge():
     )
 
 
+@app.route("/training")
+def training():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("training")
+    if guard:
+        return guard
+    role = get_role()
+    access_map = get_current_access()
+    return render_template(
+        "training.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+        profile_login=get_profile_login(),
+        access_map=access_map,
+    )
+
+
+@app.route("/training/settings")
+def training_settings():
+    if not session.get("authed"):
+        return redirect("/")
+    if get_role() != ROLE_ADMIN:
+        return redirect("/training")
+    role = get_role()
+    return render_template(
+        "training_settings.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+    )
+
+
+@app.route("/profile")
+def profile():
+    if not session.get("authed"):
+        return redirect("/")
+    role = get_role()
+    return render_template(
+        "profile.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+        profile_login=get_profile_login(),
+    )
+
+
 @app.route("/settings")
 def settings():
     if not session.get("authed"):
@@ -644,6 +829,8 @@ def login():
             session["employee_name"] = None
             session["employee_login"] = ADMIN_LOGIN
             session["last_auth_at"] = datetime.utcnow().isoformat()
+            with get_db() as conn:
+                ensure_profile(conn, ADMIN_LOGIN)
             return jsonify({"ok": True, "role": ROLE_ADMIN})
         return jsonify({"ok": False, "error": "Неверный пароль"}), 401
 
@@ -660,6 +847,8 @@ def login():
     session["employee_name"] = row["name"]
     session["employee_login"] = row["login"]
     session["last_auth_at"] = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        ensure_profile(conn, row["login"])
     return jsonify({"ok": True, "role": ROLE_EMPLOYEE, "employee": row["name"]})
 
 
@@ -717,6 +906,7 @@ def create_employee():
                 (login, name, password_hash, created_at),
             )
             ensure_employee_access(conn, cursor.lastrowid)
+            ensure_profile(conn, login)
     except sqlite3.IntegrityError:
         return jsonify({"error": "Профиль с таким логином уже существует"}), 400
     return jsonify({"ok": True})
@@ -787,6 +977,454 @@ def delete_employee(employee_id):
     if result.rowcount == 0:
         return jsonify({"error": "Профиль не найден"}), 404
     return jsonify({"ok": True})
+
+
+@app.get("/api/profile")
+def get_profile():
+    login = get_profile_login()
+    with get_db() as conn:
+        profile = get_profile_data(conn, login)
+        badges = conn.execute(
+            """
+            SELECT course_badges.course_id, course_badges.badge_label,
+                   course_badges.xp_awarded, course_badges.awarded_at,
+                   courses.title AS course_title
+            FROM course_badges
+            LEFT JOIN courses ON courses.id = course_badges.course_id
+            WHERE course_badges.login = ?
+            ORDER BY course_badges.awarded_at DESC
+            """,
+            (login,),
+        ).fetchall()
+    profile["name"] = get_profile_name()
+    profile["role"] = get_role()
+    return jsonify(
+        {
+            "profile": profile,
+            "badges": [dict(row) for row in badges],
+        }
+    )
+
+
+@app.post("/api/profile/avatar")
+def update_profile_avatar():
+    payload = request.get_json() or {}
+    avatar_url = (payload.get("avatar_url") or "").strip()
+    if avatar_url and not re.match(r"^https?://", avatar_url):
+        return jsonify({"error": "Используйте ссылку на внешний ресурс"}), 400
+    login = get_profile_login()
+    with get_db() as conn:
+        ensure_profile(conn, login)
+        conn.execute(
+            """
+            UPDATE profiles
+            SET avatar_url = ?, updated_at = ?
+            WHERE login = ?
+            """,
+            (avatar_url, datetime.utcnow().isoformat(), login),
+        )
+    return jsonify({"ok": True})
+
+
+def award_course_completion(conn, course, login):
+    existing = conn.execute(
+        """
+        SELECT course_id FROM course_badges WHERE course_id = ? AND login = ?
+        """,
+        (course["id"], login),
+    ).fetchone()
+    if existing:
+        return
+    badge_label = f"Курс: {course['title']}"
+    awarded_at = datetime.utcnow().isoformat()
+    xp_value = int(course["xp_value"] or 0)
+    conn.execute(
+        """
+        INSERT INTO course_badges (course_id, login, badge_label, xp_awarded, awarded_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (course["id"], login, badge_label, xp_value, awarded_at),
+    )
+    profile = get_profile_data(conn, login)
+    conn.execute(
+        """
+        UPDATE profiles
+        SET xp = ?, updated_at = ?
+        WHERE login = ?
+        """,
+        (int(profile["xp"]) + xp_value, awarded_at, login),
+    )
+
+
+def resolve_outline(outline_json):
+    if not outline_json:
+        return []
+    try:
+        data = json.loads(outline_json)
+        if isinstance(data, list):
+            return data
+    except json.JSONDecodeError:
+        return []
+    return []
+
+
+def list_course_access(conn, login):
+    rows = conn.execute(
+        "SELECT course_id, allowed FROM course_access WHERE login = ?",
+        (login,),
+    ).fetchall()
+    return {row["course_id"]: bool(row["allowed"]) for row in rows}
+
+
+def list_course_progress(conn, login):
+    rows = conn.execute(
+        """
+        SELECT course_id, status, current_topic, current_lesson, current_test,
+               updated_at, completed_at
+        FROM course_progress
+        WHERE login = ?
+        """,
+        (login,),
+    ).fetchall()
+    return {row["course_id"]: dict(row) for row in rows}
+
+
+@app.get("/api/training/overview")
+def training_overview():
+    guard = require_page_access("training", redirect_on_fail=False)
+    if guard:
+        return guard
+    login = get_profile_login()
+    role = get_role()
+    with get_db() as conn:
+        profile = get_profile_data(conn, login)
+        badges = conn.execute(
+            """
+            SELECT course_badges.course_id, course_badges.badge_label,
+                   course_badges.xp_awarded, course_badges.awarded_at,
+                   courses.title AS course_title
+            FROM course_badges
+            LEFT JOIN courses ON courses.id = course_badges.course_id
+            WHERE course_badges.login = ?
+            ORDER BY course_badges.awarded_at DESC
+            """,
+            (login,),
+        ).fetchall()
+        course_rows = conn.execute(
+            """
+            SELECT id, title, description, category, level, duration, xp_value,
+                   is_public, outline_json, created_at
+            FROM courses
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        access_map = list_course_access(conn, login)
+        progress_map = list_course_progress(conn, login)
+    courses = []
+    categories = set()
+    for row in course_rows:
+        outline = resolve_outline(row["outline_json"])
+        summary = get_course_outline_summary(outline)
+        is_public = bool(row["is_public"])
+        if role == ROLE_ADMIN:
+            accessible = True
+        else:
+            accessible = True if is_public else access_map.get(row["id"], False)
+        progress = progress_map.get(row["id"])
+        status = progress["status"] if progress else "not_started"
+        courses.append(
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "description": row["description"],
+                "category": row["category"],
+                "level": row["level"],
+                "duration": row["duration"],
+                "xp_value": row["xp_value"],
+                "is_public": is_public,
+                "outline": outline,
+                "summary": summary,
+                "accessible": accessible,
+                "status": status,
+                "progress": progress or {},
+            }
+        )
+        if row["category"]:
+            categories.add(row["category"])
+    profile["name"] = get_profile_name()
+    profile["role"] = role
+    return jsonify(
+        {
+            "profile": profile,
+            "badges": [dict(row) for row in badges],
+            "courses": courses,
+            "categories": sorted(categories),
+        }
+    )
+
+
+@app.post("/api/training/courses")
+def create_course():
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    title = (payload.get("title") or "").strip()
+    description = (payload.get("description") or "").strip()
+    category = (payload.get("category") or "").strip()
+    level = (payload.get("level") or "").strip()
+    duration = (payload.get("duration") or "").strip()
+    xp_value = payload.get("xp_value") or 0
+    is_public = bool(payload.get("is_public", True))
+    outline = payload.get("outline") or []
+    if not title:
+        return jsonify({"error": "Введите название курса"}), 400
+    try:
+        xp_value = int(xp_value)
+    except (TypeError, ValueError):
+        xp_value = 0
+    created_at = datetime.utcnow().isoformat()
+    outline_json = json.dumps(outline, ensure_ascii=False)
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO courses
+            (title, description, category, level, duration, xp_value, is_public,
+             outline_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                title,
+                description,
+                category,
+                level,
+                duration,
+                xp_value,
+                1 if is_public else 0,
+                outline_json,
+                created_at,
+            ),
+        )
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/training/courses/<int:course_id>")
+def delete_course(course_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    with get_db() as conn:
+        conn.execute("DELETE FROM course_access WHERE course_id = ?", (course_id,))
+        conn.execute("DELETE FROM course_progress WHERE course_id = ?", (course_id,))
+        conn.execute("DELETE FROM course_badges WHERE course_id = ?", (course_id,))
+        result = conn.execute("DELETE FROM courses WHERE id = ?", (course_id,))
+    if result.rowcount == 0:
+        return jsonify({"error": "Курс не найден"}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/training/courses/<int:course_id>/access")
+def update_course_access(course_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    access = payload.get("access")
+    login = payload.get("login")
+    allowed = payload.get("allowed")
+    updates = {}
+    if isinstance(access, dict):
+        updates = access
+    elif login:
+        updates = {login: allowed}
+    if not updates:
+        return jsonify({"error": "Нет данных для обновления"}), 400
+    with get_db() as conn:
+        for login_key, value in updates.items():
+            conn.execute(
+                """
+                INSERT INTO course_access (course_id, login, allowed)
+                VALUES (?, ?, ?)
+                ON CONFLICT(course_id, login)
+                DO UPDATE SET allowed = excluded.allowed
+                """,
+                (course_id, login_key, 1 if value else 0),
+            )
+    return jsonify({"ok": True})
+
+
+@app.post("/api/training/courses/<int:course_id>/progress")
+def update_course_progress(course_id):
+    guard = require_admin()
+    if guard:
+        return guard
+    payload = request.get_json() or {}
+    login = (payload.get("login") or "").strip()
+    status = (payload.get("status") or "not_started").strip()
+    current_topic = (payload.get("current_topic") or "").strip()
+    current_lesson = (payload.get("current_lesson") or "").strip()
+    current_test = (payload.get("current_test") or "").strip()
+    if not login:
+        return jsonify({"error": "Укажите сотрудника"}), 400
+    if status not in {"not_started", "in_progress", "completed"}:
+        return jsonify({"error": "Некорректный статус"}), 400
+    updated_at = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO course_progress
+            (course_id, login, status, current_topic, current_lesson, current_test,
+             updated_at, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(course_id, login)
+            DO UPDATE SET status = excluded.status,
+                          current_topic = excluded.current_topic,
+                          current_lesson = excluded.current_lesson,
+                          current_test = excluded.current_test,
+                          updated_at = excluded.updated_at,
+                          completed_at = excluded.completed_at
+            """,
+            (
+                course_id,
+                login,
+                status,
+                current_topic or None,
+                current_lesson or None,
+                current_test or None,
+                updated_at,
+                updated_at if status == "completed" else None,
+            ),
+        )
+        course = conn.execute(
+            "SELECT id, title, xp_value FROM courses WHERE id = ?",
+            (course_id,),
+        ).fetchone()
+        if course and status == "completed":
+            award_course_completion(conn, course, login)
+    return jsonify({"ok": True})
+
+
+@app.post("/api/training/courses/<int:course_id>/complete")
+def complete_course(course_id):
+    guard = require_page_access("training", redirect_on_fail=False)
+    if guard:
+        return guard
+    login = get_profile_login()
+    role = get_role()
+    with get_db() as conn:
+        course = conn.execute(
+            """
+            SELECT id, title, is_public, xp_value
+            FROM courses
+            WHERE id = ?
+            """,
+            (course_id,),
+        ).fetchone()
+        if not course:
+            return jsonify({"error": "Курс не найден"}), 404
+        if role != ROLE_ADMIN and not course["is_public"]:
+            access = conn.execute(
+                """
+                SELECT allowed FROM course_access
+                WHERE course_id = ? AND login = ?
+                """,
+                (course_id, login),
+            ).fetchone()
+            if not access or not access["allowed"]:
+                return jsonify({"error": "Нет доступа к курсу"}), 403
+        updated_at = datetime.utcnow().isoformat()
+        conn.execute(
+            """
+            INSERT INTO course_progress
+            (course_id, login, status, updated_at, completed_at)
+            VALUES (?, ?, 'completed', ?, ?)
+            ON CONFLICT(course_id, login)
+            DO UPDATE SET status = 'completed',
+                          updated_at = excluded.updated_at,
+                          completed_at = excluded.completed_at
+            """,
+            (course_id, login, updated_at, updated_at),
+        )
+        award_course_completion(conn, course, login)
+        profile = get_profile_data(conn, login)
+    return jsonify({"ok": True, "xp": profile["xp"]})
+
+
+@app.get("/api/training/admin-data")
+def training_admin_data():
+    guard = require_admin()
+    if guard:
+        return guard
+    with get_db() as conn:
+        employees = conn.execute(
+            """
+            SELECT login, name
+            FROM employees
+            ORDER BY name
+            """
+        ).fetchall()
+        profiles = conn.execute(
+            """
+            SELECT login, avatar_url, xp
+            FROM profiles
+            """
+        ).fetchall()
+        courses = conn.execute(
+            """
+            SELECT id, title, description, category, level, duration, xp_value,
+                   is_public, outline_json, created_at
+            FROM courses
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        access_rows = conn.execute(
+            "SELECT course_id, login, allowed FROM course_access"
+        ).fetchall()
+        progress_rows = conn.execute(
+            """
+            SELECT course_id, login, status, current_topic, current_lesson,
+                   current_test, updated_at, completed_at
+            FROM course_progress
+            """
+        ).fetchall()
+    profile_map = {row["login"]: dict(row) for row in profiles}
+    access_map = {}
+    for row in access_rows:
+        access_map.setdefault(row["course_id"], {})[row["login"]] = bool(row["allowed"])
+    progress_map = {}
+    for row in progress_rows:
+        progress_map.setdefault(row["course_id"], {})[row["login"]] = dict(row)
+    employees_data = []
+    for row in employees:
+        profile = profile_map.get(row["login"], {"avatar_url": "", "xp": 0})
+        employees_data.append(
+            {
+                "login": row["login"],
+                "name": row["name"],
+                "avatar_url": profile.get("avatar_url", ""),
+                "xp": profile.get("xp", 0),
+            }
+        )
+    courses_data = []
+    for row in courses:
+        outline = resolve_outline(row["outline_json"])
+        courses_data.append(
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "description": row["description"],
+                "category": row["category"],
+                "level": row["level"],
+                "duration": row["duration"],
+                "xp_value": row["xp_value"],
+                "is_public": bool(row["is_public"]),
+                "outline": outline,
+                "summary": get_course_outline_summary(outline),
+                "access": access_map.get(row["id"], {}),
+                "progress": progress_map.get(row["id"], {}),
+            }
+        )
+    return jsonify({"employees": employees_data, "courses": courses_data})
 
 
 @app.get("/api/tasks")
