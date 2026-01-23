@@ -267,19 +267,25 @@ function renderStatusHistory(container, statuses) {
   statuses.forEach((status) => {
     const item = document.createElement("div");
     item.className = "status-item";
+    const title =
+      status.name ||
+      status.status ||
+      status.code ||
+      status.status_code ||
+      "Статус";
+    const location = status.city || status.location || "Локация неизвестна";
+    const timestamp = status.date_time || status.timestamp;
     item.innerHTML = `
-      <strong>${status.name || status.code || "Статус"}</strong>
-      <span class="meta">${status.city || "Локация неизвестна"}</span>
-      <span class="meta">${formatDate(status.date_time)}</span>
+      <strong>${title}</strong>
+      <span class="meta">${location}</span>
+      <span class="meta">${formatDate(timestamp)}</span>
     `;
     container.appendChild(item);
   });
 }
 
-async function openShipmentDetails(shipmentId) {
-  const shipment = state.shipments.find((item) => item.id === shipmentId);
+function renderShipmentDetails(shipment, history = []) {
   if (!shipment) return;
-  state.currentShipmentId = shipmentId;
   const title = qs("shipment-detail-title");
   const route = qs("shipment-detail-route");
   const deleteBtn = qs("shipment-detail-delete");
@@ -300,9 +306,6 @@ async function openShipmentDetails(shipmentId) {
     "<div class='detail-item'><span class='detail-label'>Данные по поставке</span></div>";
   extraContainer.innerHTML =
     "<div class='detail-item'><span class='detail-label'>Дополнительные данные</span></div>";
-  statusesContainer.innerHTML =
-    "<div class='status-item'>История статусов недоступна.</div>";
-  openModal("shipment-details-modal");
 
   renderDetailItems(mainContainer, [
     { label: "Статус", value: shipment.last_status || "Нет данных" },
@@ -311,9 +314,52 @@ async function openShipmentDetails(shipmentId) {
     { label: "Трек-номер", value: trackNumber || "Не задан" },
   ]);
   renderDetailItems(extraContainer, [
-    { label: "Источник", value: "Отслеживание CDEK отключено" },
+    {
+      label: "Источник",
+      value: trackNumber ? "CDEK" : "Отслеживание CDEK отключено",
+    },
   ]);
-  renderStatusHistory(statusesContainer, []);
+  renderStatusHistory(statusesContainer, history);
+}
+
+async function loadShipmentHistory(shipmentId) {
+  return api(`/api/shipments/${shipmentId}/history`);
+}
+
+async function openShipmentDetails(shipmentId) {
+  const shipment = state.shipments.find((item) => item.id === shipmentId);
+  if (!shipment) return;
+  state.currentShipmentId = shipmentId;
+  const statusesContainer = qs("shipment-detail-statuses");
+  statusesContainer.innerHTML =
+    "<div class='status-item'>Загружаем историю статусов...</div>";
+  openModal("shipment-details-modal");
+  renderShipmentDetails(shipment, []);
+  try {
+    const history = await loadShipmentHistory(shipmentId);
+    renderShipmentDetails(shipment, history);
+  } catch (err) {
+    statusesContainer.innerHTML = `<div class='status-item'>${err.message}</div>`;
+  }
+}
+
+async function refreshShipment(shipmentId) {
+  try {
+    const data = await api(`/api/shipments/${shipmentId}/refresh`, {
+      method: "POST",
+    });
+    const updatedShipment = data.shipment;
+    state.shipments = state.shipments.map((item) =>
+      item.id === updatedShipment.id ? updatedShipment : item,
+    );
+    renderShipments();
+    if (state.currentShipmentId === shipmentId) {
+      renderShipmentDetails(updatedShipment, data.history || []);
+    }
+    showNotification("Статусы обновлены.", "success");
+  } catch (err) {
+    showNotification(err.message, "error");
+  }
 }
 
 async function handleAddLocation() {
@@ -500,6 +546,11 @@ function registerEvents() {
     qs("add-shipment-btn")?.addEventListener("click", openShipmentModal);
   }
   qs("export-btn").addEventListener("click", exportExcel);
+  qs("shipment-refresh")?.addEventListener("click", () => {
+    if (state.currentShipmentId) {
+      refreshShipment(state.currentShipmentId);
+    }
+  });
   if (isAdmin) {
     qs("location-save").addEventListener("click", handleAddLocation);
     qs("shipment-save").addEventListener("click", handleAddShipment);

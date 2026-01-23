@@ -2162,6 +2162,46 @@ def shipment_history(id):
     return jsonify([dict(row) for row in rows])
 
 
+@app.post("/api/shipments/<int:shipment_id>/refresh")
+def refresh_shipment(shipment_id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        shipment = conn.execute(
+            "SELECT * FROM shipments WHERE id = ?",
+            (shipment_id,),
+        ).fetchone()
+        if not shipment:
+            return jsonify({"error": "Поставка не найдена"}), 404
+        if not shipment["cdek_number"]:
+            return jsonify({"error": "У поставки нет трек-номера CDEK"}), 400
+        update_shipment_from_cdek(conn, shipment)
+        updated = conn.execute(
+            """
+            SELECT id, origin_label, destination_label, internal_number, display_number,
+                   cdek_state, last_status, last_location, last_update, created_at
+            FROM shipments
+            WHERE id = ?
+            """,
+            (shipment_id,),
+        ).fetchone()
+        history = conn.execute(
+            """
+            SELECT * FROM shipment_status_history
+            WHERE shipment_id = ?
+            ORDER BY timestamp DESC
+            """,
+            (shipment_id,),
+        ).fetchall()
+    return jsonify(
+        {
+            "shipment": dict(updated),
+            "history": [dict(row) for row in history],
+        }
+    )
+
+
 @app.delete("/api/shipments/<int:shipment_id>")
 def delete_shipment(shipment_id):
     guard = require_page_access("locations", redirect_on_fail=False)
