@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER LMS — Курсы</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body training-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+          <a class="ghost menu-link" href="/training">К обучению</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="menu-panel">
+          <div class="menu-stack">
+            <div class="menu-card menu-card--wide menu-card--static lms-hero">
+              <div>
+                <span class="lms-pill">CASHER LMS</span>
+                <h2>Курсы</h2>
+                <p class="subtitle">
+                  Категории, программы и прогресс обучения для команды.
+                </p>
+              </div>
+            </div>
+
+            <div class="menu-card menu-card--wide menu-card--static lms-filter">
+              <div>
+                <h3>Категории обучения</h3>
+                <p class="subtitle">
+                  Отфильтруйте программы по направлению.
+                </p>
+              </div>
+              <div class="lms-filter-actions" id="lms-filters"></div>
+            </div>
+
+            <div class="lms-courses" id="lms-courses"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/training.js"></script>
+  </body>
+</html>
