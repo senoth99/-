@@ -1,8 +1,5 @@
 const qs = (id) => document.getElementById(id);
 
-const TASKS_KEY = "crm.tasks";
-const KNOWLEDGE_KEY = "crm.knowledge";
-
 const getTodayValue = () => new Date().toISOString().split("T")[0];
 
 const formatDateLabel = (value) => {
@@ -24,70 +21,37 @@ const setDefaultDeadline = () => {
   }
 };
 
-const defaultTasks = [
-  {
-    id: "t1",
-    status: "В работе",
-    priority: "Высокий",
-    title: "Автоматизация заказов",
-    assignee: "Админ",
-    deadline: "2024-02-23",
-  },
-  {
-    id: "t2",
-    status: "План",
-    priority: "Средний",
-    title: "Наладить работу по поставкам",
-    assignee: "Админ",
-    deadline: "2024-02-28",
-  },
-];
-
-const defaultKnowledge = [
-  {
-    id: "k1",
-    section: "CRM",
-    title: "Как заполнять задачи",
-    owner: "Админ",
-    tag: "WIKI",
-  },
-  {
-    id: "k2",
-    section: "SMM",
-    title: "Регламент публикаций",
-    owner: "Админ",
-    tag: "Регламент",
-  },
-];
-
-function getStored(key, fallback) {
-  const raw = localStorage.getItem(key);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw);
-  } catch (err) {
-    return fallback;
-  }
-}
-
-function setStored(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function createId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
+const POLL_INTERVAL_MS = 15000;
+let pollHandle = null;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  if (response.status === 401) {
+    window.location.href = "/login";
+    throw new Error("unauthorized");
+  }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || "Ошибка запроса");
   }
   return response.json();
+}
+
+function setSyncStatus(id, message, status = "idle") {
+  const el = qs(id);
+  if (!el) return;
+  el.textContent = message;
+  el.dataset.status = status;
+}
+
+function formatTimestamp(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ru-RU");
 }
 
 async function loadAssignees() {
@@ -123,8 +87,9 @@ function renderTasks(tasks) {
       <td><span class="tag tag-status">${task.status}</span></td>
       <td><span class="tag tag-priority">${task.priority}</span></td>
       <td>${task.title}</td>
-      <td>${task.assignee}</td>
+      <td>${task.assignee || "—"}</td>
       <td>${deadlineLabel}</td>
+      <td>${task.created_by_name || "—"}</td>
       <td><button class="ghost small" data-task-delete="${task.id}">Удалить</button></td>
     `;
     body.appendChild(row);
@@ -138,10 +103,11 @@ function renderKnowledge(items) {
   items.forEach((item) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td><span class="tag tag-section">${item.section}</span></td>
+      <td><span class="tag tag-section">${item.section || "Общее"}</span></td>
       <td>${item.title}</td>
-      <td>${item.owner}</td>
-      <td><span class="tag tag-wiki">${item.tag}</span></td>
+      <td>${item.owner || "—"}</td>
+      <td><span class="tag tag-wiki">${item.tag || "WIKI"}</span></td>
+      <td>${item.created_by_name || "—"}</td>
       <td><button class="ghost small" data-knowledge-delete="${item.id}">Удалить</button></td>
     `;
     body.appendChild(row);
@@ -177,86 +143,157 @@ function renderStats(tasks) {
   });
 }
 
-function init() {
-  const tasks = getStored(TASKS_KEY, defaultTasks);
-  const knowledge = getStored(KNOWLEDGE_KEY, defaultKnowledge);
-  setStored(TASKS_KEY, tasks);
-  setStored(KNOWLEDGE_KEY, knowledge);
+async function refreshTasks({ silent = false } = {}) {
+  try {
+    if (!silent) {
+      setSyncStatus("task-sync-status", "Синхронизация...", "syncing");
+    }
+    const tasks = await api("/api/tasks");
+    renderTasks(tasks);
+    renderStats(tasks);
+    setSyncStatus(
+      "task-sync-status",
+      `Обновлено ${formatTimestamp(new Date().toISOString())}`,
+      "ready",
+    );
+    return tasks;
+  } catch (err) {
+    setSyncStatus("task-sync-status", "Ошибка синхронизации", "error");
+    return [];
+  }
+}
 
-  renderTasks(tasks);
-  renderKnowledge(knowledge);
-  renderStats(tasks);
+async function refreshKnowledge({ silent = false } = {}) {
+  try {
+    if (!silent) {
+      setSyncStatus("knowledge-sync-status", "Синхронизация...", "syncing");
+    }
+    const items = await api("/api/knowledge");
+    renderKnowledge(items);
+    setSyncStatus(
+      "knowledge-sync-status",
+      `Обновлено ${formatTimestamp(new Date().toISOString())}`,
+      "ready",
+    );
+    return items;
+  } catch (err) {
+    setSyncStatus("knowledge-sync-status", "Ошибка синхронизации", "error");
+    return [];
+  }
+}
+
+function startPolling() {
+  if (pollHandle) return;
+  pollHandle = setInterval(() => {
+    if (qs("task-table-body")) {
+      refreshTasks({ silent: true });
+    }
+    if (qs("knowledge-table-body")) {
+      refreshKnowledge({ silent: true });
+    }
+    if (!qs("task-table-body") && qs("load-stats")) {
+      refreshTasks({ silent: true });
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (!pollHandle) return;
+  clearInterval(pollHandle);
+  pollHandle = null;
+}
+
+function initTasksPage() {
   setDefaultDeadline();
+  refreshTasks();
 
-  loadAssignees();
-
-  qs("task-add")?.addEventListener("click", () => {
+  qs("task-add")?.addEventListener("click", async () => {
     const title = qs("task-title")?.value.trim();
     const status = qs("task-status")?.value;
     const priority = qs("task-priority")?.value;
     const assignee = qs("task-assignee")?.value;
     const deadline = qs("task-deadline")?.value;
     if (!title) return;
-    const next = [
-      {
-        id: createId("task"),
+    await api("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({
         title,
         status,
         priority,
         assignee,
         deadline,
-      },
-      ...getStored(TASKS_KEY, []),
-    ];
-    setStored(TASKS_KEY, next);
+      }),
+    });
     qs("task-title").value = "";
     qs("task-deadline").value = "";
     setDefaultDeadline();
-    renderTasks(next);
-    renderStats(next);
+    refreshTasks();
   });
 
-  qs("knowledge-add")?.addEventListener("click", () => {
+  qs("task-table-body")?.addEventListener("click", async (event) => {
+    const btn = event.target.closest("[data-task-delete]");
+    if (!btn) return;
+    const id = btn.dataset.taskDelete;
+    await api(`/api/tasks/${id}`, { method: "DELETE" });
+    refreshTasks();
+  });
+}
+
+function initKnowledgePage() {
+  refreshKnowledge();
+
+  qs("knowledge-add")?.addEventListener("click", async () => {
     const title = qs("knowledge-title")?.value.trim();
     const section = qs("knowledge-section")?.value.trim() || "Общее";
     const owner = qs("knowledge-owner")?.value;
     const tag = qs("knowledge-tag")?.value.trim() || "WIKI";
     if (!title) return;
-    const next = [
-      {
-        id: createId("knowledge"),
+    await api("/api/knowledge", {
+      method: "POST",
+      body: JSON.stringify({
         title,
         section,
         owner,
         tag,
-      },
-      ...getStored(KNOWLEDGE_KEY, []),
-    ];
-    setStored(KNOWLEDGE_KEY, next);
+      }),
+    });
     qs("knowledge-title").value = "";
     qs("knowledge-section").value = "";
     qs("knowledge-tag").value = "";
-    renderKnowledge(next);
+    refreshKnowledge();
   });
 
-  qs("task-table-body")?.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-task-delete]");
-    if (!btn) return;
-    const id = btn.dataset.taskDelete;
-    const next = getStored(TASKS_KEY, []).filter((task) => task.id !== id);
-    setStored(TASKS_KEY, next);
-    renderTasks(next);
-    renderStats(next);
-  });
-
-  qs("knowledge-table-body")?.addEventListener("click", (event) => {
+  qs("knowledge-table-body")?.addEventListener("click", async (event) => {
     const btn = event.target.closest("[data-knowledge-delete]");
     if (!btn) return;
     const id = btn.dataset.knowledgeDelete;
-    const next = getStored(KNOWLEDGE_KEY, []).filter((item) => item.id !== id);
-    setStored(KNOWLEDGE_KEY, next);
-    renderKnowledge(next);
+    await api(`/api/knowledge/${id}`, { method: "DELETE" });
+    refreshKnowledge();
   });
+}
+
+function initOperationsHome() {
+  if (!qs("load-stats")) return;
+  refreshTasks();
+}
+
+function init() {
+  loadAssignees();
+
+  if (qs("task-table-body")) {
+    initTasksPage();
+  }
+
+  if (qs("knowledge-table-body")) {
+    initKnowledgePage();
+  }
+
+  initOperationsHome();
+
+  if (qs("task-table-body") || qs("knowledge-table-body") || qs("load-stats")) {
+    startPolling();
+    window.addEventListener("beforeunload", stopPolling);
+  }
 }
 
 init();
