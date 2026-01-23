@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CASHER CRM — Профиль</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    class="crm-body profile-page"
+    data-authed="{{ 'true' if authed else 'false' }}"
+    data-role="{{ role }}"
+  >
+    <div class="crm-background" aria-hidden="true">
+      <span class="crm-orb orb-1"></span>
+      <span class="crm-orb orb-2"></span>
+      <span class="crm-orb orb-3"></span>
+    </div>
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="topbar-actions">
+          <a class="ghost menu-link" href="/">В меню</a>
+        </div>
+      </header>
+
+      <main class="home-main">
+        <section class="menu-panel">
+          <div class="menu-stack">
+            <div class="menu-card menu-card--wide menu-card--static profile-hero">
+              <div class="profile-hero-main">
+                <div class="profile-avatar-lg" id="profile-avatar">{{ profile_name[0] }}</div>
+                <div>
+                  <h2 id="profile-name">{{ profile_name }}</h2>
+                  <p class="subtitle" id="profile-role">{{ role_label }}</p>
+                  <div class="profile-xp" id="profile-xp">XP: 0</div>
+                </div>
+              </div>
+              <div class="profile-avatar-actions">
+                <p class="subtitle">
+                  Обновите аватарку через внешнюю ссылку, чтобы не нагружать сервер.
+                </p>
+                <div class="profile-avatar-form">
+                  <input
+                    type="text"
+                    id="avatar-url"
+                    placeholder="https://..."
+                  />
+                  <button class="secondary" id="avatar-save">Сохранить</button>
+                </div>
+                <span class="error" id="avatar-error"></span>
+              </div>
+            </div>
+
+            <div class="menu-card menu-card--wide menu-card--static profile-badges">
+              <div class="settings-header">
+                <div>
+                  <h2>Бейджи за обучение</h2>
+                  <p class="subtitle">
+                    Награды за завершенные курсы и пройденные тесты.
+                  </p>
+                </div>
+              </div>
+              <div class="profile-badge-grid" id="profile-badges"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/profile.js"></script>
+  </body>
+</html>
