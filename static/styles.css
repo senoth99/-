@@ -2765,6 +2765,11 @@ td {
   font-size: 14px;
 }
 
+.integration-summary .social-link {
+  color: inherit;
+  text-decoration: none;
+}
+
 @media (max-width: 768px) {
   .filter-bar {
     grid-template-columns: 1fr;

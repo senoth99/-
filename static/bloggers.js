@@ -39,6 +39,7 @@ const state = {
 let selectedBloggerId = null;
 let activeIntegrationId = null;
 let activeBloggerId = null;
+let editingBloggerId = null;
 
 const toastDurationMs = 10000;
 const toastLimit = 3;
@@ -58,6 +59,7 @@ const serializeBloggerNotes = (blogger) =>
     instagram: blogger.instagram || "",
     telegram: blogger.telegram || "",
     tiktok: blogger.tiktok || "",
+    twitch: blogger.twitch || "",
     niche: blogger.niche || "",
     category: blogger.category || "",
     status: blogger.status || "",
@@ -68,8 +70,80 @@ const getPrimarySocial = (blogger) => {
   if (blogger.instagram) return { platform: "instagram", profileUrl: blogger.instagram };
   if (blogger.telegram) return { platform: "telegram", profileUrl: blogger.telegram };
   if (blogger.tiktok) return { platform: "tiktok", profileUrl: blogger.tiktok };
+  if (blogger.twitch) return { platform: "twitch", profileUrl: blogger.twitch };
   return { platform: "", profileUrl: "" };
 };
+
+const normalizeSocialUrl = (value, platform) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (platform === "instagram") {
+    if (trimmed.startsWith("@")) {
+      return `https://instagram.com/${trimmed.slice(1)}`;
+    }
+  }
+  if (platform === "telegram") {
+    if (trimmed.startsWith("@")) {
+      return `https://t.me/${trimmed.slice(1)}`;
+    }
+  }
+  if (platform === "tiktok") {
+    if (trimmed.startsWith("@")) {
+      return `https://www.tiktok.com/${trimmed}`;
+    }
+  }
+  if (platform === "twitch") {
+    if (trimmed.startsWith("@")) {
+      return `https://www.twitch.tv/${trimmed.slice(1)}`;
+    }
+  }
+  return `https://${trimmed}`;
+};
+
+const renderSocialRow = (label, value, platform) => {
+  if (!value) {
+    return `<div><strong>${label}</strong><span>—</span></div>`;
+  }
+  const url = normalizeSocialUrl(value, platform);
+  if (!url) {
+    return `<div><strong>${label}</strong></div>`;
+  }
+  return `<div><a class="social-link" href="${url}" target="_blank" rel="noopener noreferrer"><strong>${label}</strong></a></div>`;
+};
+
+const setBloggerModalTitle = (title) => {
+  const titleEl = qs("#blogger-modal-title");
+  if (titleEl) titleEl.textContent = title;
+};
+
+const populateBloggerForm = (blogger) => {
+  const setValue = (selector, value) => {
+    const field = qs(selector);
+    if (field) field.value = value || "";
+  };
+  setValue("#blogger-name", blogger.name || "");
+  setValue("#blogger-instagram", blogger.instagram || "");
+  setValue("#blogger-telegram", blogger.telegram || "");
+  setValue("#blogger-tiktok", blogger.tiktok || "");
+  setValue("#blogger-twitch", blogger.twitch || "");
+  const niche = qs("#blogger-niche");
+  if (niche) niche.value = blogger.niche || state.pools.niches[0];
+  const category = qs("#blogger-category");
+  if (category) category.value = blogger.category || "Микро";
+};
+
+const getBloggerFormData = () => ({
+  name: qs("#blogger-name")?.value.trim() || "",
+  instagram: qs("#blogger-instagram")?.value.trim() || "",
+  telegram: qs("#blogger-telegram")?.value.trim() || "",
+  tiktok: qs("#blogger-tiktok")?.value.trim() || "",
+  twitch: qs("#blogger-twitch")?.value.trim() || "",
+  niche: qs("#blogger-niche")?.value || state.pools.niches[0],
+  category: qs("#blogger-category")?.value || "Микро",
+  status: "Новый",
+  tags: [qs("#blogger-niche")?.value || ""].filter(Boolean),
+});
 
 const normalizeBlogger = (row) => {
   const notes = safeJsonParse(row.notes, {});
@@ -82,6 +156,7 @@ const normalizeBlogger = (row) => {
     instagram: notes.instagram || "",
     telegram: notes.telegram || "",
     tiktok: notes.tiktok || "",
+    twitch: notes.twitch || "",
     niche: notes.niche || state.pools.niches[0],
     category: notes.category || "Микро",
     status: notes.status || "Новый",
@@ -732,6 +807,7 @@ const renderBloggerList = () => {
       blogger.instagram,
       blogger.telegram,
       blogger.tiktok,
+      blogger.twitch,
       blogger.niche,
       blogger.category,
       ...(blogger.tags || []),
@@ -751,6 +827,7 @@ const renderBloggerList = () => {
             <span>${blogger.instagram}</span>
             <span>${blogger.telegram}</span>
             <span>${blogger.tiktok}</span>
+            <span>${blogger.twitch}</span>
           </div>
           <div class="pill-row">
             <span class="pill">${blogger.niche}</span>
@@ -775,6 +852,7 @@ const renderBloggerPicker = () => {
       blogger.instagram,
       blogger.telegram,
       blogger.tiktok,
+      blogger.twitch,
       blogger.niche,
       ...(blogger.tags || []),
     ].join(" ");
@@ -785,7 +863,7 @@ const renderBloggerPicker = () => {
       (blogger) => `
         <div class="picker-item" data-picker-id="${blogger.id}">
           <strong>${blogger.name}</strong>
-          <span>${blogger.instagram || blogger.telegram || blogger.tiktok}</span>
+          <span>${blogger.instagram || blogger.telegram || blogger.tiktok || blogger.twitch}</span>
         </div>
       `
     )
@@ -1003,7 +1081,11 @@ const exportIntegrations = () => {
   const rows = getBaseFilteredIntegrations().map((integration) => {
     const blogger = state.bloggers.find((item) => item.id === integration.bloggerId);
     const link =
-      blogger?.instagram || blogger?.telegram || blogger?.tiktok || "—";
+      blogger?.instagram ||
+      blogger?.telegram ||
+      blogger?.tiktok ||
+      blogger?.twitch ||
+      "—";
     const budget = parseNumber(integration.budget);
     const reach = parseNumber(integration.reach);
     const cpm = reach > 0 ? Math.round((budget / reach) * 1000) : "";
@@ -1066,9 +1148,10 @@ const renderBloggerDetail = (bloggerId) => {
   qs("#blogger-detail-name").textContent = blogger.name;
   qs("#blogger-detail-subtitle").textContent = `${blogger.niche} • ${blogger.category}`;
   qs("#blogger-detail-info").innerHTML = [
-    `<div><strong>Instagram</strong>${blogger.instagram || "—"}</div>`,
-    `<div><strong>Telegram</strong>${blogger.telegram || "—"}</div>`,
-    `<div><strong>TikTok</strong>${blogger.tiktok || "—"}</div>`,
+    renderSocialRow("Instagram", blogger.instagram, "instagram"),
+    renderSocialRow("Telegram", blogger.telegram, "telegram"),
+    renderSocialRow("TikTok", blogger.tiktok, "tiktok"),
+    renderSocialRow("Twitch", blogger.twitch, "twitch"),
     `<div><strong>Теги</strong>${(blogger.tags || []).join(", ") || "—"}</div>`,
   ].join("");
 
@@ -1081,7 +1164,7 @@ const renderBloggerDetail = (bloggerId) => {
       ? integrations
           .map(
             (integration) => `
-            <div class="info-card">
+            <div class="info-card" data-integration-id="${integration.id}">
               <h4>${integration.format}</h4>
               <div class="info-meta">
                 <span>${formatDateLabel(integration.date)}</span>
@@ -1141,6 +1224,7 @@ const resetBloggerForm = () => {
     "#blogger-instagram",
     "#blogger-telegram",
     "#blogger-tiktok",
+    "#blogger-twitch",
   ].forEach((selector) => {
     const field = qs(selector);
     if (field) field.value = "";
@@ -1151,19 +1235,8 @@ const resetBloggerForm = () => {
   if (category) category.value = "Микро";
 };
 
-const addBlogger = async () => {
-  const name = qs("#blogger-name")?.value.trim();
-  if (!name) return;
-  const blogger = {
-    name,
-    instagram: qs("#blogger-instagram")?.value.trim() || "",
-    telegram: qs("#blogger-telegram")?.value.trim() || "",
-    tiktok: qs("#blogger-tiktok")?.value.trim() || "",
-    niche: qs("#blogger-niche")?.value || state.pools.niches[0],
-    category: qs("#blogger-category")?.value || "Микро",
-    status: "Новый",
-    tags: [qs("#blogger-niche")?.value || ""].filter(Boolean),
-  };
+const addBlogger = async (blogger) => {
+  if (!blogger.name) return;
   const { platform, profileUrl } = getPrimarySocial(blogger);
   try {
     await fetchJson("/api/bloggers", {
@@ -1176,10 +1249,6 @@ const addBlogger = async () => {
       }),
     });
     await loadBloggersData();
-    resetBloggerForm();
-    updateFormPools();
-    renderBloggerList();
-    renderBloggerPicker();
     const latestMatch = state.bloggers.find((item) => item.name === blogger.name);
     if (latestMatch && qs("#integration-blogger")) {
       selectedBloggerId = latestMatch.id;
@@ -1189,6 +1258,63 @@ const addBlogger = async () => {
   } catch (error) {
     showNotification(error.message, "error");
   }
+};
+
+const updateBlogger = async (bloggerId, blogger) => {
+  if (!bloggerId || !blogger.name) return;
+  const { platform, profileUrl } = getPrimarySocial(blogger);
+  try {
+    await fetchJson(`/api/bloggers/${bloggerId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: blogger.name,
+        platform,
+        profile_url: profileUrl,
+        notes: serializeBloggerNotes(blogger),
+      }),
+    });
+    await loadBloggersData();
+    const updated = state.bloggers.find((item) => item.id === bloggerId);
+    if (updated && selectedBloggerId === bloggerId && qs("#integration-blogger")) {
+      qs("#integration-blogger").value = updated.name;
+    }
+    renderBloggerDetail(bloggerId);
+    showNotification("Карточка блогера обновлена.", "success");
+  } catch (error) {
+    showNotification(error.message, "error");
+  }
+};
+
+const openCreateBloggerModal = (stacked = false) => {
+  editingBloggerId = null;
+  resetBloggerForm();
+  setBloggerModalTitle("Добавить блогера");
+  openModal("blogger-modal", stacked);
+};
+
+const openEditBloggerModal = () => {
+  const blogger = state.bloggers.find((item) => item.id === activeBloggerId);
+  if (!blogger) return;
+  editingBloggerId = blogger.id;
+  setBloggerModalTitle("Редактировать блогера");
+  populateBloggerForm(blogger);
+  openModal("blogger-modal", true);
+};
+
+const saveBlogger = async () => {
+  const blogger = getBloggerFormData();
+  if (!blogger.name) return;
+  if (editingBloggerId) {
+    await updateBlogger(editingBloggerId, blogger);
+  } else {
+    await addBlogger(blogger);
+  }
+  editingBloggerId = null;
+  resetBloggerForm();
+  updateFormPools();
+  renderBloggerList();
+  renderBloggerPicker();
+  closeModal("blogger-modal");
 };
 
 const openIntegrationModal = () => {
@@ -1244,7 +1370,7 @@ const saveIntegration = async () => {
   }
 };
 
-const openIntegrationDetail = (integrationId) => {
+const openIntegrationDetail = (integrationId, stacked = false) => {
   const integration = state.integrations.find((item) => item.id === integrationId);
   if (!integration) return;
   activeIntegrationId = integrationId;
@@ -1340,7 +1466,7 @@ const openIntegrationDetail = (integrationId) => {
   if (deleteButton) {
     deleteButton.classList.toggle("hidden", !canViewOverallStats);
   }
-  openModal("integration-detail-modal");
+  openModal("integration-detail-modal", stacked);
 };
 
 const saveIntegrationDetail = async () => {
@@ -1525,13 +1651,11 @@ const initBasePage = () => {
   renderBloggerList();
 
   qs("#open-add-blogger")?.addEventListener("click", () => {
-    resetBloggerForm();
-    openModal("blogger-modal");
+    openCreateBloggerModal();
   });
 
   qs("#save-blogger")?.addEventListener("click", () => {
-    addBlogger();
-    closeModal("blogger-modal");
+    saveBlogger();
   });
 
   ["#blogger-search", "#blogger-category-filter", "#blogger-niche-filter"].forEach(
@@ -1549,6 +1673,7 @@ const initBasePage = () => {
     openModal("blogger-detail-modal");
   });
 
+  qs("#edit-blogger")?.addEventListener("click", openEditBloggerModal);
   qs("#delete-blogger")?.addEventListener("click", deleteBlogger);
 };
 
@@ -1657,13 +1782,11 @@ const initIntegrationsPage = () => {
   });
 
   qs("#open-blogger-from-picker")?.addEventListener("click", () => {
-    resetBloggerForm();
-    openModal("blogger-modal", true);
+    openCreateBloggerModal(true);
   });
 
   qs("#save-blogger")?.addEventListener("click", () => {
-    addBlogger();
-    closeModal("blogger-modal");
+    saveBlogger();
     renderBloggerPicker();
   });
 
@@ -1690,6 +1813,13 @@ const initIntegrationsPage = () => {
     if (!card) return;
     const integrationId = Number(card.dataset.integrationId);
     openIntegrationDetail(integrationId);
+  });
+
+  qs("#blogger-detail-integrations")?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-integration-id]");
+    if (!card) return;
+    const integrationId = Number(card.dataset.integrationId);
+    openIntegrationDetail(integrationId, true);
   });
 
   qs("#save-integration-detail")?.addEventListener("click", saveIntegrationDetail);
