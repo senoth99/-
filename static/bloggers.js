@@ -1,13 +1,12 @@
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
 
-const profileLogin = document.body?.dataset?.profileLogin || "employee";
+const profileName = document.body?.dataset?.profileName || "";
+const defaultAgentName = profileName || "Сотрудник";
 const role = document.body?.dataset?.role || "employee";
 const hasBloggersSettingsAccess =
   document.body?.dataset?.accessBloggersSettings === "true";
 const canViewOverallStats = role === "admin" || hasBloggersSettingsAccess;
-
-const STORAGE_KEY = "bloggers_state_v1";
 
 const defaultPools = {
   niches: ["UGC", "Бьюти", "Лайфстайл", "Спорт"],
@@ -30,43 +29,11 @@ const createDefaultState = () => ({
   integrationDetailItems: [],
 });
 
-const loadStoredState = () => {
-  try {
-    const raw = window.localStorage?.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (error) {
-    console.warn("Failed to load bloggers state:", error);
-    return null;
-  }
-};
-
-const persistState = () => {
-  try {
-    if (!window.localStorage) return;
-    const payload = {
-      pools: state.pools,
-      bloggers: state.bloggers,
-      integrations: state.integrations,
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch (error) {
-    console.warn("Failed to save bloggers state:", error);
-  }
-};
-
-const storedState = loadStoredState();
 const defaultState = createDefaultState();
 
 const state = {
   ...defaultState,
-  ...storedState,
-  pools: { ...defaultPools, ...(storedState?.pools || {}) },
-  bloggers: Array.isArray(storedState?.bloggers) ? storedState.bloggers : [],
-  integrations: Array.isArray(storedState?.integrations)
-    ? storedState.integrations
-    : [],
-  statsFilters: { ...defaultState.statsFilters, ...(storedState?.statsFilters || {}) },
+  pools: { ...defaultPools },
 };
 
 let selectedBloggerId = null;
@@ -75,6 +42,117 @@ let activeBloggerId = null;
 
 const toastDurationMs = 10000;
 const toastLimit = 3;
+
+const safeJsonParse = (value, fallback = {}) => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn("Failed to parse bloggers payload:", error);
+    return fallback;
+  }
+};
+
+const serializeBloggerNotes = (blogger) =>
+  JSON.stringify({
+    instagram: blogger.instagram || "",
+    telegram: blogger.telegram || "",
+    tiktok: blogger.tiktok || "",
+    niche: blogger.niche || "",
+    category: blogger.category || "",
+    status: blogger.status || "",
+    tags: Array.isArray(blogger.tags) ? blogger.tags : [],
+  });
+
+const getPrimarySocial = (blogger) => {
+  if (blogger.instagram) return { platform: "instagram", profileUrl: blogger.instagram };
+  if (blogger.telegram) return { platform: "telegram", profileUrl: blogger.telegram };
+  if (blogger.tiktok) return { platform: "tiktok", profileUrl: blogger.tiktok };
+  return { platform: "", profileUrl: "" };
+};
+
+const normalizeBlogger = (row) => {
+  const notes = safeJsonParse(row.notes, {});
+  return {
+    id: row.id,
+    name: row.name,
+    platform: row.platform || "",
+    profileUrl: row.profile_url || "",
+    createdAt: row.created_at || "",
+    instagram: notes.instagram || "",
+    telegram: notes.telegram || "",
+    tiktok: notes.tiktok || "",
+    niche: notes.niche || state.pools.niches[0],
+    category: notes.category || "Микро",
+    status: notes.status || "Новый",
+    tags: Array.isArray(notes.tags) ? notes.tags : [],
+  };
+};
+
+const normalizeIntegration = (row) => {
+  const data = safeJsonParse(row.data, {});
+  return {
+    id: row.id,
+    bloggerId: row.blogger_id,
+    type: row.type,
+    createdAt: row.created_at || "",
+    agent: data.agent || "",
+    date: data.date || "",
+    terms: data.terms || "",
+    format: data.format || "",
+    reach: data.reach || "",
+    budget: data.budget || "",
+    ugcStatus: data.ugcStatus || "",
+    items: Array.isArray(data.items) ? data.items : [],
+    comment: data.comment || "",
+    track: data.track || "",
+    contacts: data.contacts || "",
+  };
+};
+
+const fetchJson = async (url, options = {}) => {
+  const response = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (response.ok) {
+    if (response.status === 204) return null;
+    return response.json();
+  }
+  let errorMessage = "Ошибка запроса.";
+  try {
+    const payload = await response.json();
+    if (payload?.error) errorMessage = payload.error;
+  } catch (error) {
+    errorMessage = response.statusText || errorMessage;
+  }
+  throw new Error(errorMessage);
+};
+
+const loadBloggersData = async () => {
+  const bloggers = await fetchJson("/api/bloggers");
+  state.bloggers = Array.isArray(bloggers) ? bloggers.map(normalizeBlogger) : [];
+  const integrations = await Promise.all(
+    state.bloggers.map((blogger) =>
+      fetchJson(`/api/bloggers/${blogger.id}/integrations`).then((rows) =>
+        (Array.isArray(rows) ? rows : []).map(normalizeIntegration)
+      )
+    )
+  );
+  state.integrations = integrations.flat().sort((a, b) => {
+    if (!a.createdAt && !b.createdAt) return 0;
+    return String(b.createdAt).localeCompare(String(a.createdAt));
+  });
+};
+
+const refreshIntegrationsForBlogger = async (bloggerId) => {
+  const rows = await fetchJson(`/api/bloggers/${bloggerId}/integrations`);
+  const integrations = (Array.isArray(rows) ? rows : []).map(normalizeIntegration);
+  state.integrations = [
+    ...state.integrations.filter((item) => item.bloggerId !== bloggerId),
+    ...integrations,
+  ].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+};
 
 const showNotification = (message, type = "info") => {
   if (!message) return;
@@ -790,7 +868,7 @@ const renderIntegrationStats = () => {
   const isSubfilterActive = subfilter && subfilter.classList.contains("is-open");
   const fallbackMonth = selectedMonth || getCurrentMonthValue();
   const filtered = getBaseFilteredIntegrations().filter((integration) => {
-    if (!canViewOverallStats && integration.agent !== profileLogin) {
+    if (!canViewOverallStats && integration.agent !== defaultAgentName) {
       return false;
     }
     const month = getMonthKey(integration.date);
@@ -1024,7 +1102,7 @@ const renderBloggerDetail = (bloggerId) => {
   }
 };
 
-const deleteBlogger = () => {
+const deleteBlogger = async () => {
   if (!activeBloggerId) return;
   if (!canViewOverallStats) {
     showNotification("Нет прав для удаления блогера.", "error");
@@ -1038,22 +1116,23 @@ const deleteBlogger = () => {
     relatedCount ? ` и ${relatedCount} интеграций` : ""
   }?`;
   if (!window.confirm(confirmText.trim())) return;
-  state.bloggers = state.bloggers.filter((item) => item.id !== activeBloggerId);
-  state.integrations = state.integrations.filter(
-    (integration) => integration.bloggerId !== activeBloggerId
-  );
-  if (selectedBloggerId === activeBloggerId) {
-    selectedBloggerId = null;
-    const input = qs("#integration-blogger");
-    if (input) input.value = "";
+  try {
+    await fetchJson(`/api/bloggers/${activeBloggerId}`, { method: "DELETE" });
+    await loadBloggersData();
+    if (selectedBloggerId === activeBloggerId) {
+      selectedBloggerId = null;
+      const input = qs("#integration-blogger");
+      if (input) input.value = "";
+    }
+    activeBloggerId = null;
+    closeModal("blogger-detail-modal");
+    renderBloggerList();
+    renderBloggerPicker();
+    refreshIntegrationViews();
+    showNotification("Блогер удален из базы.", "info");
+  } catch (error) {
+    showNotification(error.message, "error");
   }
-  activeBloggerId = null;
-  persistState();
-  closeModal("blogger-detail-modal");
-  renderBloggerList();
-  renderBloggerPicker();
-  refreshIntegrationViews();
-  showNotification("Блогер удален из базы.", "info");
 };
 
 const resetBloggerForm = () => {
@@ -1072,11 +1151,10 @@ const resetBloggerForm = () => {
   if (category) category.value = "Микро";
 };
 
-const addBlogger = () => {
+const addBlogger = async () => {
   const name = qs("#blogger-name")?.value.trim();
   if (!name) return;
   const blogger = {
-    id: Date.now(),
     name,
     instagram: qs("#blogger-instagram")?.value.trim() || "",
     telegram: qs("#blogger-telegram")?.value.trim() || "",
@@ -1086,17 +1164,31 @@ const addBlogger = () => {
     status: "Новый",
     tags: [qs("#blogger-niche")?.value || ""].filter(Boolean),
   };
-  state.bloggers.unshift(blogger);
-  resetBloggerForm();
-  updateFormPools();
-  renderBloggerList();
-  renderBloggerPicker();
-  persistState();
-  if (qs("#integration-blogger")) {
-    selectedBloggerId = blogger.id;
-    qs("#integration-blogger").value = blogger.name;
+  const { platform, profileUrl } = getPrimarySocial(blogger);
+  try {
+    await fetchJson("/api/bloggers", {
+      method: "POST",
+      body: JSON.stringify({
+        name: blogger.name,
+        platform,
+        profile_url: profileUrl,
+        notes: serializeBloggerNotes(blogger),
+      }),
+    });
+    await loadBloggersData();
+    resetBloggerForm();
+    updateFormPools();
+    renderBloggerList();
+    renderBloggerPicker();
+    const latestMatch = state.bloggers.find((item) => item.name === blogger.name);
+    if (latestMatch && qs("#integration-blogger")) {
+      selectedBloggerId = latestMatch.id;
+      qs("#integration-blogger").value = latestMatch.name;
+    }
+    showNotification("Блогер добавлен в базу.", "success");
+  } catch (error) {
+    showNotification(error.message, "error");
   }
-  showNotification("Блогер добавлен в базу.", "success");
 };
 
 const openIntegrationModal = () => {
@@ -1106,7 +1198,7 @@ const openIntegrationModal = () => {
   const reach = qs("#integration-reach");
   if (reach) reach.value = "";
   const agent = qs("#integration-agent");
-  if (agent) agent.value = profileLogin;
+  if (agent) agent.value = defaultAgentName;
   const date = qs("#integration-date");
   if (date) {
     date.value = getTodayValue();
@@ -1119,12 +1211,11 @@ const openIntegrationModal = () => {
   renderBloggerPicker();
 };
 
-const saveIntegration = () => {
+const saveIntegration = async () => {
   if (!selectedBloggerId) return;
   const integration = {
-    id: Date.now(),
     bloggerId: selectedBloggerId,
-    agent: profileLogin,
+    agent: defaultAgentName,
     date: qs("#integration-date")?.value || "",
     terms: qs("#integration-terms")?.value || "",
     format: qs("#integration-format")?.value || "",
@@ -1136,11 +1227,21 @@ const saveIntegration = () => {
     track: qs("#integration-track")?.value.trim() || "",
     contacts: qs("#integration-contacts")?.value.trim() || "",
   };
-  state.integrations.unshift(integration);
-  persistState();
-  closeModal("integration-modal");
-  refreshIntegrationViews();
-  showNotification("Интеграция сохранена.", "success");
+  try {
+    await fetchJson(`/api/bloggers/${selectedBloggerId}/integrations`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "integration",
+        data: JSON.stringify(integration),
+      }),
+    });
+    await refreshIntegrationsForBlogger(selectedBloggerId);
+    closeModal("integration-modal");
+    refreshIntegrationViews();
+    showNotification("Интеграция сохранена.", "success");
+  } catch (error) {
+    showNotification(error.message, "error");
+  }
 };
 
 const openIntegrationDetail = (integrationId) => {
@@ -1242,7 +1343,7 @@ const openIntegrationDetail = (integrationId) => {
   openModal("integration-detail-modal");
 };
 
-const saveIntegrationDetail = () => {
+const saveIntegrationDetail = async () => {
   if (!activeIntegrationId) return;
   const integration = state.integrations.find((item) => item.id === activeIntegrationId);
   if (!integration) return;
@@ -1258,13 +1359,36 @@ const saveIntegrationDetail = () => {
   integration.track = qs("#integration-detail-track")?.value.trim() || integration.track;
   integration.contacts =
     qs("#integration-detail-contacts")?.value.trim() || integration.contacts;
-  persistState();
-  closeModal("integration-detail-modal");
-  refreshIntegrationViews();
-  showNotification("Изменения по интеграции сохранены.", "success");
+  try {
+    await fetchJson(`/api/bloggers/integrations/${activeIntegrationId}`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: integration.type || "integration",
+        data: JSON.stringify({
+          agent: integration.agent,
+          date: integration.date,
+          terms: integration.terms,
+          format: integration.format,
+          reach: integration.reach,
+          budget: integration.budget,
+          ugcStatus: integration.ugcStatus,
+          items: integration.items,
+          comment: integration.comment,
+          track: integration.track,
+          contacts: integration.contacts,
+        }),
+      }),
+    });
+    await refreshIntegrationsForBlogger(integration.bloggerId);
+    closeModal("integration-detail-modal");
+    refreshIntegrationViews();
+    showNotification("Изменения по интеграции сохранены.", "success");
+  } catch (error) {
+    showNotification(error.message, "error");
+  }
 };
 
-const deleteIntegration = () => {
+const deleteIntegration = async () => {
   if (!activeIntegrationId) return;
   if (!canViewOverallStats) {
     showNotification("Нет прав для удаления интеграции.", "error");
@@ -1274,14 +1398,24 @@ const deleteIntegration = () => {
   const blogger = state.bloggers.find((item) => item.id === integration?.bloggerId);
   const confirmText = `Удалить интеграцию${blogger ? ` с ${blogger.name}` : ""}?`;
   if (!window.confirm(confirmText)) return;
-  state.integrations = state.integrations.filter(
-    (item) => item.id !== activeIntegrationId
-  );
-  activeIntegrationId = null;
-  persistState();
-  closeModal("integration-detail-modal");
-  refreshIntegrationViews();
-  showNotification("Интеграция удалена.", "info");
+  try {
+    await fetchJson(`/api/bloggers/integrations/${activeIntegrationId}`, {
+      method: "DELETE",
+    });
+    if (integration?.bloggerId) {
+      await refreshIntegrationsForBlogger(integration.bloggerId);
+    } else {
+      state.integrations = state.integrations.filter(
+        (item) => item.id !== activeIntegrationId
+      );
+    }
+    activeIntegrationId = null;
+    closeModal("integration-detail-modal");
+    refreshIntegrationViews();
+    showNotification("Интеграция удалена.", "info");
+  } catch (error) {
+    showNotification(error.message, "error");
+  }
 };
 
 const initSettingsInteractions = () => {
@@ -1304,7 +1438,6 @@ const initSettingsInteractions = () => {
       updateFormPools();
       renderBloggerList();
       renderBloggerPicker();
-      persistState();
       showNotification("Новое значение добавлено в настройки.", "success");
     }
     const removeButton = event.target.closest("[data-remove-tag]");
@@ -1318,7 +1451,6 @@ const initSettingsInteractions = () => {
       updateFormPools();
       renderBloggerList();
       renderBloggerPicker();
-      persistState();
       showNotification("Значение удалено из настроек.", "info");
     }
   });
@@ -1578,16 +1710,21 @@ const initModals = () => {
   });
 };
 
-const init = () => {
+const init = async () => {
   updateFormPools();
   setDefaultDateFields();
   initSettingsInteractions();
   initBloggersTabs();
+  initModals();
+  initViewToggles();
+  try {
+    await loadBloggersData();
+  } catch (error) {
+    showNotification(error.message, "error");
+  }
   initBasePage();
   initSettingsPage();
   initIntegrationsPage();
-  initModals();
-  initViewToggles();
 };
 
 init();
