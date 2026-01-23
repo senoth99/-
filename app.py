@@ -759,6 +759,23 @@ def training():
     )
 
 
+@app.route("/training/courses")
+def training_courses():
+    if not session.get("authed"):
+        return redirect("/")
+    guard = require_page_access("training")
+    if guard:
+        return guard
+    role = get_role()
+    return render_template(
+        "training_courses.html",
+        authed=True,
+        role=role,
+        role_label=get_role_label(role),
+        profile_name=get_profile_name(),
+    )
+
+
 @app.route("/training/settings")
 def training_settings():
     if not session.get("authed"):
