@@ -3,6 +3,10 @@ import logging
 import os
 import re
 import sqlite3
+import threading
+import time
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 from hashlib import sha256
 
@@ -143,6 +147,19 @@ def init_db():
                 last_location TEXT,
                 last_update TEXT,
                 created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shipment_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shipment_id INTEGER NOT NULL,
+                status TEXT,
+                location TEXT,
+                status_code TEXT,
+                timestamp TEXT,
+                FOREIGN KEY(shipment_id) REFERENCES shipments(id)
             )
             """
         )
@@ -562,13 +579,149 @@ def verify_password(password, password_hash):
     return hash_password(password) == password_hash
 
 
-def resolve_shipment_status():
+CDEK_TOKEN_URL = "https://api.cdek.ru/v2/oauth/token"
+CDEK_TRACKING_URL = "https://api.cdek.ru/v2/trackings"
+CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
+CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
+_cdek_token_cache = {"token": None, "expires_at": None}
+_cdek_token_lock = threading.Lock()
+
+
+def _get_cdek_token():
+    if not CDEK_CLIENT_ID or not CDEK_CLIENT_SECRET:
+        logger.warning("CDEK credentials are not configured.")
+        return None
+    with _cdek_token_lock:
+        expires_at = _cdek_token_cache.get("expires_at")
+        token = _cdek_token_cache.get("token")
+        if token and expires_at and datetime.utcnow() < expires_at:
+            return token
+        payload = urllib.parse.urlencode(
+            {
+                "grant_type": "client_credentials",
+                "client_id": CDEK_CLIENT_ID,
+                "client_secret": CDEK_CLIENT_SECRET,
+            }
+        ).encode("utf-8")
+        request_obj = urllib.request.Request(
+            CDEK_TOKEN_URL, data=payload, method="POST"
+        )
+        request_obj.add_header("Content-Type", "application/x-www-form-urlencoded")
+        try:
+            with urllib.request.urlopen(request_obj, timeout=15) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception:
+            logger.exception("Failed to fetch CDEK OAuth token.")
+            return None
+        token = data.get("access_token")
+        if not token:
+            logger.error("CDEK OAuth token response missing access_token.")
+            return None
+        expires_in = data.get("expires_in") or 0
+        if expires_in:
+            expires_in = max(int(expires_in) - 30, 30)
+        _cdek_token_cache["token"] = token
+        _cdek_token_cache["expires_at"] = datetime.utcnow() + timedelta(
+            seconds=int(expires_in) if expires_in else 300
+        )
+        return token
+
+
+def _extract_cdek_status(payload):
+    entity = payload.get("entity") if isinstance(payload, dict) else None
+    data = entity or payload or {}
+    statuses = data.get("statuses") or data.get("status") or []
+    if isinstance(statuses, dict):
+        statuses = [statuses]
+    if not statuses:
+        return None
+    def sort_key(item):
+        return item.get("date_time") or item.get("timestamp") or item.get("date") or ""
+    latest = max(statuses, key=sort_key)
+    location = (
+        latest.get("city")
+        or latest.get("city_name")
+        or latest.get("location")
+        or latest.get("office")
+    )
     return {
-        "status": "Создано вручную",
-        "location": None,
-        "timestamp": datetime.utcnow().isoformat(),
-        "code": "MANUAL",
+        "status": latest.get("name") or latest.get("description") or latest.get("status"),
+        "code": latest.get("code"),
+        "location": location,
+        "timestamp": latest.get("date_time")
+        or latest.get("timestamp")
+        or latest.get("date")
+        or datetime.utcnow().isoformat(),
     }
+
+
+def fetch_cdek_status(track_number: str):
+    token = _get_cdek_token()
+    if not token:
+        return None
+    query = urllib.parse.urlencode({"track_number": track_number})
+    request_obj = urllib.request.Request(
+        f"{CDEK_TRACKING_URL}?{query}", method="GET"
+    )
+    request_obj.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(request_obj, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        logger.exception("Failed to fetch CDEK tracking status.")
+        return None
+    status_data = _extract_cdek_status(payload)
+    if not status_data:
+        logger.warning("CDEK tracking response missing status data.")
+    return status_data
+
+
+def update_shipment_from_cdek(conn, shipment_row):
+    track_number = shipment_row["cdek_number"]
+    if not track_number:
+        return
+    status_data = fetch_cdek_status(track_number)
+    if not status_data:
+        return
+    current_code = shipment_row["cdek_state"]
+    current_status = shipment_row["last_status"]
+    current_location = shipment_row["last_location"]
+    current_timestamp = shipment_row["last_update"]
+    if (
+        status_data.get("code") == current_code
+        and status_data.get("status") == current_status
+        and status_data.get("location") == current_location
+        and status_data.get("timestamp") == current_timestamp
+    ):
+        return
+    conn.execute(
+        """
+        UPDATE shipments
+        SET cdek_state = ?, last_status = ?, last_location = ?, last_update = ?
+        WHERE id = ?
+        """,
+        (
+            status_data.get("code"),
+            status_data.get("status"),
+            status_data.get("location"),
+            status_data.get("timestamp"),
+            shipment_row["id"],
+        ),
+    )
+    conn.execute(
+        """
+        INSERT INTO shipment_status_history
+        (shipment_id, status, location, status_code, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            shipment_row["id"],
+            status_data.get("status"),
+            status_data.get("location"),
+            status_data.get("code"),
+            status_data.get("timestamp"),
+        ),
+    )
 
 
 def get_actor_snapshot():
@@ -1966,8 +2119,7 @@ def add_shipment():
     cdek_uuid = None
     if not origin_label or not destination_label or not display_number:
         return jsonify({"error": "Заполните все поля поставки"}), 400
-    status_data = resolve_shipment_status()
-    cdek_state = status_data.get("code") or "MANUAL"
+    cdek_state = None
     with get_db() as conn:
         conn.execute(
             """
@@ -1984,15 +2136,30 @@ def add_shipment():
                 cdek_number,
                 cdek_uuid,
                 cdek_state,
-                status_data.get("status"),
-                status_data.get("location"),
-                status_data.get("timestamp"),
+                None,
+                None,
+                None,
                 datetime.utcnow().isoformat(),
             ),
         )
     return jsonify({"ok": True})
 
 
+@app.get("/api/shipments/<int:id>/history")
+def shipment_history(id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM shipment_status_history
+            WHERE shipment_id = ?
+            ORDER BY timestamp DESC
+            """,
+            (id,),
+        ).fetchall()
+    return jsonify([dict(row) for row in rows])
 
 
 @app.delete("/api/shipments/<int:shipment_id>")
@@ -2013,6 +2180,21 @@ def delete_shipment(shipment_id):
     return jsonify({"ok": True})
 
 
+def cdek_updater_loop():
+    while True:
+        try:
+            with get_db() as conn:
+                shipments = conn.execute(
+                    "SELECT * FROM shipments WHERE cdek_number IS NOT NULL"
+                ).fetchall()
+                for shipment in shipments:
+                    update_shipment_from_cdek(conn, shipment)
+        except Exception:
+            logger.exception("Failed to update CDEK statuses.")
+        time.sleep(300)
+
+
 if __name__ == "__main__":
     init_db()
+    threading.Thread(target=cdek_updater_loop, daemon=True).start()
     app.run(host="0.0.0.0", port=80, debug=True)
