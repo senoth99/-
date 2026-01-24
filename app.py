@@ -581,7 +581,7 @@ def verify_password(password, password_hash):
 
 
 CDEK_TOKEN_URL = "https://api.cdek.ru/v2/oauth/token"
-CDEK_STATUS_URL = "https://api.cdek.ru/v2/orders/status"
+CDEK_STATUS_URL = "https://api.cdek.ru/v2/trackings/by/track_number"
 CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
 CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
 _cdek_token_cache = {"token": None, "expires_at": None}
@@ -628,21 +628,17 @@ def _get_cdek_token():
         return token
 
 
-def _extract_cdek_status(payload):
-    entity = payload.get("entity") if isinstance(payload, dict) else None
-    data = entity or payload or {}
-    statuses = data.get("statuses") or data.get("status") or []
-    if isinstance(statuses, dict):
-        statuses = [statuses]
+def _extract_cdek_latest_status(statuses):
     if not statuses:
         return None
     def sort_key(item):
         return item.get("date_time") or item.get("timestamp") or item.get("date") or ""
     latest = max(statuses, key=sort_key)
+    location_data = latest.get("location")
     location = (
         latest.get("city")
         or latest.get("city_name")
-        or latest.get("location")
+        or (location_data.get("city") if isinstance(location_data, dict) else None)
         or latest.get("office")
     )
     return {
@@ -656,32 +652,37 @@ def _extract_cdek_status(payload):
     }
 
 
-def _parse_cdek_status_payload(payload):
+def _parse_cdek_tracking_payload(payload):
     if not payload:
         return None
-    orders = payload.get("orders") if isinstance(payload, dict) else None
-    if isinstance(orders, list) and orders:
-        for order in orders:
-            status = _extract_cdek_status(order)
+    if isinstance(payload, dict) and payload.get("errors"):
+        logger.error("CDEK tracking API returned errors: %s", payload.get("errors"))
+    entities = payload.get("entities") if isinstance(payload, dict) else None
+    if not entities and isinstance(payload, dict):
+        entities = payload.get("trackings") or payload.get("orders")
+    if isinstance(entities, list) and entities:
+        for entity in entities:
+            statuses = entity.get("statuses") or []
+            if isinstance(statuses, dict):
+                statuses = [statuses]
+            status = _extract_cdek_latest_status(statuses)
             if status:
                 return status
         return None
-    return _extract_cdek_status(payload)
+    if isinstance(payload, dict):
+        statuses = payload.get("statuses") or payload.get("status") or []
+        if isinstance(statuses, dict):
+            statuses = [statuses]
+        return _extract_cdek_latest_status(statuses)
+    return None
 
 
-def _build_cdek_status_payloads(track_number: str):
+def _build_cdek_tracking_payload(track_number: str):
     sanitized = (track_number or "").strip()
     sanitized = re.sub(r"\s+", "", sanitized)
-    payloads = []
-    if sanitized.isdigit():
-        payloads.append({"orders": [{"cdek_number": int(sanitized)}]})
-    if sanitized:
-        payloads.append({"orders": [{"cdek_number": sanitized}]})
-        payloads.append({"orders": [{"im_number": sanitized}]})
-        payloads.append({"orders": [{"number": sanitized}]})
-        if "-" in sanitized:
-            payloads.append({"orders": [{"order_uuid": sanitized}]})
-    return payloads
+    if not sanitized:
+        return None
+    return {"track_numbers": [sanitized]}
 
 
 def _fetch_cdek_status_payload(token: str, body: dict):
@@ -701,28 +702,29 @@ def fetch_cdek_status(track_number: str):
     token = _get_cdek_token()
     if not token:
         return None
-    last_error = None
-    payloads = _build_cdek_status_payloads(track_number)
-    if not payloads:
+    payload_body = _build_cdek_tracking_payload(track_number)
+    if not payload_body:
         logger.warning("CDEK tracking number is empty.")
         return None
-    for payload_body in payloads:
-        try:
-            payload = _fetch_cdek_status_payload(token, payload_body)
-            return _parse_cdek_status_payload(payload)
-        except urllib.error.HTTPError as exc:
-            last_error = exc
-            if exc.code in {400, 404, 422}:
-                continue
-            logger.exception("Failed to fetch CDEK order status.")
+    try:
+        payload = _fetch_cdek_status_payload(token, payload_body)
+        return _parse_cdek_tracking_payload(payload)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401 or exc.code == 403:
+            logger.error("CDEK authorization failed with HTTP %s.", exc.code)
             return None
-        except Exception as exc:
-            last_error = exc
-            logger.exception("Failed to fetch CDEK order status.")
+        if exc.code == 429:
+            logger.warning("CDEK rate limit reached. Sleeping briefly before retry.")
+            time.sleep(0.5)
             return None
-    if last_error:
-        logger.exception("Failed to fetch CDEK order status.")
-    return None
+        if exc.code in {400, 404, 422}:
+            logger.warning("CDEK tracking API returned HTTP %s.", exc.code)
+            return None
+        logger.exception("Failed to fetch CDEK tracking status.")
+        return None
+    except Exception:
+        logger.exception("Failed to fetch CDEK tracking status.")
+        return None
 
 
 def update_shipment_from_cdek(conn, shipment_row):
