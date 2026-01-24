@@ -25,7 +25,7 @@
           </div>
         </header>
 
-        <section class="hero">
+        <section class="hero locations-hero">
           <span class="hero-badge">Работа с точками продаж</span>
           <h2>Точки продаж</h2>
         </section>
@@ -85,6 +85,18 @@
         </div>
         <div class="modal-close-row">
           <button class="icon-btn" data-close="records-modal">×</button>
+        </div>
+        <div class="card-actions modal-actions">
+          <button class="light" id="records-export" data-export-location="">
+            Экспорт Excel
+          </button>
+          <button
+            class="light danger admin-only"
+            id="records-delete"
+            data-delete-location=""
+          >
+            Удалить
+          </button>
         </div>
         <div class="table-wrapper">
           <table>
