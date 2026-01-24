@@ -669,49 +669,60 @@ def _parse_cdek_status_payload(payload):
     return _extract_cdek_status(payload)
 
 
-def fetch_cdek_status(track_number: str):
-    token = _get_cdek_token()
-    if not token:
-        return None
-    body = json.dumps(
-        {
-            "orders": [
-                {"cdek_number": track_number}
-            ]
-        }
-    ).encode("utf-8")
+def _build_cdek_status_payloads(track_number: str):
+    sanitized = (track_number or "").strip()
+    sanitized = re.sub(r"\s+", "", sanitized)
+    payloads = []
+    if sanitized.isdigit():
+        payloads.append({"orders": [{"cdek_number": int(sanitized)}]})
+    if sanitized:
+        payloads.append({"orders": [{"cdek_number": sanitized}]})
+        payloads.append({"orders": [{"im_number": sanitized}]})
+        payloads.append({"orders": [{"number": sanitized}]})
+        if "-" in sanitized:
+            payloads.append({"orders": [{"order_uuid": sanitized}]})
+    return payloads
+
+
+def _fetch_cdek_status_payload(token: str, body: dict):
+    request_body = json.dumps(body).encode("utf-8")
     request_obj = urllib.request.Request(
         CDEK_STATUS_URL,
-        data=body,
+        data=request_body,
         method="POST",
     )
     request_obj.add_header("Authorization", f"Bearer {token}")
     request_obj.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(request_obj, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code != 405:
-            logger.exception("Failed to fetch CDEK order status.")
-            return None
-        logger.warning("CDEK status endpoint rejected POST; retrying with GET.")
-        query = urllib.parse.urlencode({"cdek_number": track_number})
-        request_obj = urllib.request.Request(
-            f"{CDEK_STATUS_URL}?{query}",
-            method="GET",
-        )
-        request_obj.add_header("Authorization", f"Bearer {token}")
-        try:
-            with urllib.request.urlopen(request_obj, timeout=20) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except Exception:
-            logger.exception("Failed to fetch CDEK order status.")
-            return None
-    except Exception:
-        logger.exception("Failed to fetch CDEK order status.")
-        return None
+    with urllib.request.urlopen(request_obj, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
 
-    return _parse_cdek_status_payload(payload)
+
+def fetch_cdek_status(track_number: str):
+    token = _get_cdek_token()
+    if not token:
+        return None
+    last_error = None
+    payloads = _build_cdek_status_payloads(track_number)
+    if not payloads:
+        logger.warning("CDEK tracking number is empty.")
+        return None
+    for payload_body in payloads:
+        try:
+            payload = _fetch_cdek_status_payload(token, payload_body)
+            return _parse_cdek_status_payload(payload)
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code in {400, 404, 422}:
+                continue
+            logger.exception("Failed to fetch CDEK order status.")
+            return None
+        except Exception as exc:
+            last_error = exc
+            logger.exception("Failed to fetch CDEK order status.")
+            return None
+    if last_error:
+        logger.exception("Failed to fetch CDEK order status.")
+    return None
 
 
 def update_shipment_from_cdek(conn, shipment_row):
