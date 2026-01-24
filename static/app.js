@@ -105,24 +105,10 @@ function renderLocations() {
     const shipmentAction = isAdmin
       ? `
       <button class="secondary" data-add-shipment="${location.id}">
-        ➕ Добавить поставку
+        Добавить поставку
       </button>
     `
       : "";
-    const headerActions = isAdmin
-      ? `
-      <button class="light small" data-export-location="${location.id}">
-        Экспорт Excel
-      </button>
-      <button class="light danger small" data-delete-location="${location.id}">
-        Удалить
-      </button>
-    `
-      : `
-      <button class="light small" data-export-location="${location.id}">
-        Экспорт Excel
-      </button>
-    `;
     const actions = isAdmin
       ? `
       <div class="card-actions">
@@ -141,9 +127,7 @@ function renderLocations() {
           <h3>${location.name}</h3>
           <div class="meta">${location.address || "Адрес не указан"}</div>
         </div>
-        <div class="card-header-actions">
-          ${headerActions}
-        </div>
+        <div class="card-header-actions"></div>
       </div>
       <div class="stats">
         <div class="stat">Остаток<span>${formatNumber(
@@ -192,7 +176,7 @@ function renderShipments() {
     card.className = "card shipment-card animated-card";
     card.dataset.shipment = shipment.id;
     const statusLabel = shipment.last_status || "Создан";
-    const statusEmoji = getShipmentStatusEmoji(statusLabel);
+    const statusMeta = getShipmentStatusMeta(statusLabel);
     const actionButtons = isAdmin
       ? `
         <button class="icon-btn danger" data-delete="${shipment.id}" aria-label="Удалить">×</button>
@@ -202,11 +186,6 @@ function renderShipments() {
       <div class="shipment-info">
         <h3>${shipment.display_number || shipment.internal_number || "-"}</h3>
         <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
-        <div class="shipment-status" aria-label="${statusLabel || "Нет данных"}">
-          <span class="shipment-status-emoji" title="${statusLabel || "Нет данных"}">
-            ${statusEmoji}
-          </span>
-        </div>
         <div class="meta">Локация: ${shipment.last_location || "Локация неизвестна"}</div>
         <div class="meta">Обновлено: ${formatDate(shipment.last_update)}</div>
       </div>
@@ -215,24 +194,47 @@ function renderShipments() {
           ⟳
         </button>
         ${actionButtons}
+        <div
+          class="shipment-status-icon ${statusMeta.className}"
+          title="${statusLabel || "Нет данных"}"
+          aria-label="${statusLabel || "Нет данных"}"
+        >
+          ${statusMeta.icon}
+        </div>
       </div>
     `;
     grid.appendChild(card);
   });
 }
 
-function getShipmentStatusEmoji(status) {
+function getShipmentStatusMeta(status) {
   const normalized = status.toLowerCase();
   if (normalized.includes("создан")) {
-    return "🆕";
+    return {
+      className: "status-created",
+      icon:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    };
   }
   if (normalized.includes("пути") || normalized.includes("в пути")) {
-    return "🚚";
+    return {
+      className: "status-transit",
+      icon:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16h12V7H3v9Zm12 0h3.5L21 13.5V16h-6Zm-9 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm11 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"/></svg>',
+    };
   }
   if (normalized.includes("забра")) {
-    return "✅";
+    return {
+      className: "status-delivered",
+      icon:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12.5 3.2 3.2L18 7.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    };
   }
-  return "❔";
+  return {
+    className: "status-unknown",
+    icon:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17h.01M9.1 9.2a3 3 0 1 1 4.8 2.4c-.9.6-1.4 1.1-1.4 2.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  };
 }
 
 function renderDetailItems(container, items) {
@@ -475,6 +477,8 @@ async function submitUpload() {
 async function openRecords(locationId) {
   const location = state.locations.find((item) => item.id === locationId);
   qs("records-title").textContent = location?.name || "Детали точки";
+  qs("records-export").dataset.exportLocation = locationId;
+  qs("records-delete").dataset.deleteLocation = locationId;
   const body = qs("records-body");
   body.innerHTML = "";
   try {
