@@ -25,68 +25,6 @@ const formatDate = (value) => {
 };
 
 
-const statusIconMap = {
-  DELIVERED: "📦",
-  DELIVERED_TO_RECIPIENT: "📦",
-  DELIVERED_TO_CLIENT: "📦",
-  DELIVERED_TO_DOOR: "📦",
-  DELIVERED_TO_PVZ: "📦",
-  DELIVERED_TO_POSTOMAT: "📦",
-  READY_FOR_PICKUP: "🏬",
-  ARRIVED_AT_PVZ: "🏬",
-  READY_TO_PICKUP: "🏬",
-  READY_TO_RECEIVE: "🏬",
-  IN_TRANSIT: "🚚",
-  TRANSIT: "🚚",
-  ON_THE_WAY: "🚚",
-  ACCEPTED: "🕒",
-  RECEIVED: "🕒",
-  TAKEN: "🕒",
-  CREATED: "📝",
-  PENDING_REGISTRATION: "⏳",
-  UNKNOWN: "❔",
-  MANUAL: "📝",
-};
-
-const resolveStatusIcon = (shipment) => {
-  const code = (shipment.cdek_state || "").toUpperCase();
-  if (statusIconMap[code]) {
-    return statusIconMap[code];
-  }
-  const statusText = (shipment.last_status || "").toLowerCase();
-  if (
-    statusText.includes("вручен") ||
-    statusText.includes("вручён") ||
-    statusText.includes("доставлен")
-  ) {
-    return "📦";
-  }
-  if (
-    statusText.includes("выдан") ||
-    statusText.includes("готов") ||
-    statusText.includes("ожидает получения")
-  ) {
-    return "🏬";
-  }
-  if (statusText.includes("принят")) {
-    return "🕒";
-  }
-  if (statusText.includes("создан")) {
-    return "📝";
-  }
-  if (statusText.includes("ожидает регистрации")) {
-    return "⏳";
-  }
-  if (
-    statusText.includes("в пути") ||
-    statusText.includes("отправлен") ||
-    statusText.includes("отгруж")
-  ) {
-    return "🚚";
-  }
-  return "🚚";
-};
-
 const toastDurationMs = 10000;
 const toastLimit = 3;
 
@@ -155,19 +93,40 @@ async function loadShipments() {
 function renderLocations() {
   const grid = qs("location-grid");
   grid.innerHTML = "";
+  if (isAdmin) {
+    const addCard = document.createElement("button");
+    addCard.type = "button";
+    addCard.className = "card add-card animated-card admin-only";
+    addCard.dataset.addLocation = "true";
+    addCard.innerHTML = `
+      <span class="add-card-icon">+</span>
+      <span class="add-card-text">Добавить точку</span>
+    `;
+    grid.appendChild(addCard);
+  }
   if (!state.locations.length) {
-    grid.innerHTML =
-      "<div class='card'>Нет точек продаж. Добавьте первую точку.</div>";
+    const emptyCard = document.createElement("div");
+    emptyCard.className = "card";
+    emptyCard.textContent = "Нет точек продаж. Добавьте первую точку.";
+    grid.appendChild(emptyCard);
     return;
   }
   state.locations.forEach((location) => {
     const card = document.createElement("div");
     card.className = "card animated-card";
+    const shipmentAction = isAdmin
+      ? `
+      <button class="secondary" data-add-shipment="${location.id}">
+        ➕ Добавить поставку
+      </button>
+    `
+      : "";
     const actions = isAdmin
       ? `
       <div class="card-actions">
         <button class="secondary" data-upload="${location.id}">Импорт</button>
         <button class="light" data-records="${location.id}">Детали</button>
+        <button class="light" data-export-location="${location.id}">Экспорт Excel</button>
         <button class="light danger" data-delete-location="${location.id}">
           Удалить
         </button>
@@ -176,6 +135,7 @@ function renderLocations() {
       : `
       <div class="card-actions">
         <button class="secondary" data-records="${location.id}">Детали</button>
+        <button class="light" data-export-location="${location.id}">Экспорт Excel</button>
       </div>
     `;
     card.innerHTML = `
@@ -194,6 +154,9 @@ function renderLocations() {
         <div class="stat">Обновление<span>${formatDate(
           location.last_update,
         )}</span></div>
+      </div>
+      <div class="card-actions primary-actions">
+        ${shipmentAction}
       </div>
       ${actions}
     `;
@@ -219,19 +182,19 @@ function renderShipments() {
       `
       : "";
     card.innerHTML = `
-      <div class="shipment-header">
-        <div>
-          <h3>${shipment.display_number || shipment.internal_number || "-"}</h3>
-          <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
-        </div>
-        <div class="shipment-actions">
-          ${actionButtons}
-        </div>
+      <div class="shipment-actions-left">
+        <button class="icon-btn" data-refresh="${shipment.id}" aria-label="Обновить статусы">
+          ⟳
+        </button>
+        ${actionButtons}
       </div>
-      <div class="shipment-status">${shipment.last_status || "Нет данных"}</div>
-      <div class="meta">${shipment.last_location || "Локация неизвестна"}</div>
-      <div class="meta">${formatDate(shipment.last_update)}</div>
-      <div class="shipment-truck">${resolveStatusIcon(shipment)}</div>
+      <div class="shipment-info">
+        <h3>${shipment.display_number || shipment.internal_number || "-"}</h3>
+        <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
+        <div class="shipment-status">Статус: ${shipment.last_status || "Нет данных"}</div>
+        <div class="meta">Локация: ${shipment.last_location || "Локация неизвестна"}</div>
+        <div class="meta">Обновлено: ${formatDate(shipment.last_update)}</div>
+      </div>
     `;
     grid.appendChild(card);
   });
@@ -356,7 +319,7 @@ async function refreshShipment(shipmentId) {
     if (state.currentShipmentId === shipmentId) {
       renderShipmentDetails(updatedShipment, data.history || []);
     }
-    showNotification("Статусы обновлены.", "success");
+    showNotification("Статусы обновлены", "success");
   } catch (err) {
     showNotification(err.message, "error");
   }
@@ -383,7 +346,7 @@ async function handleAddLocation() {
   }
 }
 
-function openShipmentModal() {
+function openShipmentModal(originLabel = null) {
   const origin = qs("shipment-origin");
   const destination = qs("shipment-destination");
   const options = [
@@ -405,6 +368,9 @@ function openShipmentModal() {
     destinationOption.textContent = option.label;
     destination.appendChild(destinationOption);
   });
+  if (originLabel) {
+    origin.value = originLabel;
+  }
   qs("shipment-display-number").value = "";
   qs("shipment-error").textContent = "";
   openModal("shipment-modal");
@@ -498,8 +464,15 @@ async function openRecords(locationId) {
   }
 }
 
-async function exportExcel() {
-  const response = await fetch("/api/export");
+const sanitizeFilename = (value) =>
+  value
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+
+async function exportLocationExcel(locationId) {
+  const location = state.locations.find((item) => item.id === locationId);
+  const response = await fetch(`/api/export/${locationId}`);
   if (!response.ok) {
     showNotification("Ошибка экспорта.", "error");
     return;
@@ -508,7 +481,8 @@ async function exportExcel() {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "crm_export.xlsx";
+  const name = location?.name ? sanitizeFilename(location.name) : "location";
+  link.download = `export_${name}.xlsx`;
   link.click();
   window.URL.revokeObjectURL(url);
   showNotification("Экспорт Excel начался.", "info");
@@ -540,18 +514,6 @@ async function deleteLocation(locationId) {
 
 function registerEvents() {
   if (isAdmin) {
-    qs("add-location-btn")?.addEventListener("click", () =>
-      openModal("location-modal"),
-    );
-    qs("add-shipment-btn")?.addEventListener("click", openShipmentModal);
-  }
-  qs("export-btn").addEventListener("click", exportExcel);
-  qs("shipment-refresh")?.addEventListener("click", () => {
-    if (state.currentShipmentId) {
-      refreshShipment(state.currentShipmentId);
-    }
-  });
-  if (isAdmin) {
     qs("location-save").addEventListener("click", handleAddLocation);
     qs("shipment-save").addEventListener("click", handleAddShipment);
     qs("upload-submit").addEventListener("click", submitUpload);
@@ -564,7 +526,7 @@ function registerEvents() {
   document.addEventListener("click", (event) => {
     const target = event.target;
     const actionTarget = target.closest(
-      "[data-close],[data-upload],[data-records],[data-delete],[data-delete-location],[data-shipment]",
+      "[data-close],[data-upload],[data-records],[data-delete],[data-delete-location],[data-shipment],[data-add-location],[data-add-shipment],[data-export-location],[data-refresh]",
     );
     if (!actionTarget) {
       return;
@@ -578,12 +540,28 @@ function registerEvents() {
     if (actionTarget.dataset.shipment) {
       openShipmentDetails(Number(actionTarget.dataset.shipment));
     }
+    if (actionTarget.dataset.addLocation) {
+      if (!isAdmin) return;
+      openModal("location-modal");
+    }
+    if (actionTarget.dataset.addShipment) {
+      if (!isAdmin) return;
+      const locationId = Number(actionTarget.dataset.addShipment);
+      const location = state.locations.find((item) => item.id === locationId);
+      openShipmentModal(location?.name || null);
+    }
     if (actionTarget.dataset.upload) {
       if (!isAdmin) return;
       openUpload(Number(actionTarget.dataset.upload));
     }
     if (actionTarget.dataset.records) {
       openRecords(Number(actionTarget.dataset.records));
+    }
+    if (actionTarget.dataset.exportLocation) {
+      exportLocationExcel(Number(actionTarget.dataset.exportLocation));
+    }
+    if (actionTarget.dataset.refresh) {
+      refreshShipment(Number(actionTarget.dataset.refresh));
     }
     if (actionTarget.dataset.delete) {
       if (!isAdmin) return;
