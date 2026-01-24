@@ -93,23 +93,11 @@ async function loadShipments() {
 function renderLocations() {
   const grid = qs("location-grid");
   grid.innerHTML = "";
-  if (isAdmin) {
-    const addCard = document.createElement("button");
-    addCard.type = "button";
-    addCard.className = "card add-card animated-card admin-only";
-    addCard.dataset.addLocation = "true";
-    addCard.innerHTML = `
-      <span class="add-card-icon">+</span>
-      <span class="add-card-text">Добавить точку</span>
-    `;
-    grid.appendChild(addCard);
-  }
   if (!state.locations.length) {
     const emptyCard = document.createElement("div");
     emptyCard.className = "card";
     emptyCard.textContent = "Нет точек продаж. Добавьте первую точку.";
     grid.appendChild(emptyCard);
-    return;
   }
   state.locations.forEach((location) => {
     const card = document.createElement("div");
@@ -121,26 +109,42 @@ function renderLocations() {
       </button>
     `
       : "";
+    const headerActions = isAdmin
+      ? `
+      <button class="light small" data-export-location="${location.id}">
+        Экспорт Excel
+      </button>
+      <button class="light danger small" data-delete-location="${location.id}">
+        Удалить
+      </button>
+    `
+      : `
+      <button class="light small" data-export-location="${location.id}">
+        Экспорт Excel
+      </button>
+    `;
     const actions = isAdmin
       ? `
       <div class="card-actions">
         <button class="secondary" data-upload="${location.id}">Импорт</button>
         <button class="light" data-records="${location.id}">Детали</button>
-        <button class="light" data-export-location="${location.id}">Экспорт Excel</button>
-        <button class="light danger" data-delete-location="${location.id}">
-          Удалить
-        </button>
       </div>
     `
       : `
       <div class="card-actions">
         <button class="secondary" data-records="${location.id}">Детали</button>
-        <button class="light" data-export-location="${location.id}">Экспорт Excel</button>
       </div>
     `;
     card.innerHTML = `
-      <h3>${location.name}</h3>
-      <div class="meta">${location.address || "Адрес не указан"}</div>
+      <div class="card-header-row">
+        <div>
+          <h3>${location.name}</h3>
+          <div class="meta">${location.address || "Адрес не указан"}</div>
+        </div>
+        <div class="card-header-actions">
+          ${headerActions}
+        </div>
+      </div>
       <div class="stats">
         <div class="stat">Остаток<span>${formatNumber(
           location.total_stock,
@@ -162,6 +166,17 @@ function renderLocations() {
     `;
     grid.appendChild(card);
   });
+  if (isAdmin) {
+    const addCard = document.createElement("button");
+    addCard.type = "button";
+    addCard.className = "card add-card animated-card admin-only";
+    addCard.dataset.addLocation = "true";
+    addCard.innerHTML = `
+      <span class="add-card-icon">+</span>
+      <span class="add-card-text">Добавить точку</span>
+    `;
+    grid.appendChild(addCard);
+  }
 }
 
 function renderShipments() {
@@ -176,28 +191,48 @@ function renderShipments() {
     const card = document.createElement("div");
     card.className = "card shipment-card animated-card";
     card.dataset.shipment = shipment.id;
+    const statusLabel = shipment.last_status || "Создан";
+    const statusEmoji = getShipmentStatusEmoji(statusLabel);
     const actionButtons = isAdmin
       ? `
         <button class="icon-btn danger" data-delete="${shipment.id}" aria-label="Удалить">×</button>
       `
       : "";
     card.innerHTML = `
-      <div class="shipment-actions-left">
+      <div class="shipment-info">
+        <h3>${shipment.display_number || shipment.internal_number || "-"}</h3>
+        <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
+        <div class="shipment-status" aria-label="${statusLabel || "Нет данных"}">
+          <span class="shipment-status-emoji" title="${statusLabel || "Нет данных"}">
+            ${statusEmoji}
+          </span>
+        </div>
+        <div class="meta">Локация: ${shipment.last_location || "Локация неизвестна"}</div>
+        <div class="meta">Обновлено: ${formatDate(shipment.last_update)}</div>
+      </div>
+      <div class="shipment-actions-right">
         <button class="icon-btn" data-refresh="${shipment.id}" aria-label="Обновить статусы">
           ⟳
         </button>
         ${actionButtons}
       </div>
-      <div class="shipment-info">
-        <h3>${shipment.display_number || shipment.internal_number || "-"}</h3>
-        <div class="shipment-route">${shipment.origin_label} → ${shipment.destination_label}</div>
-        <div class="shipment-status">Статус: ${shipment.last_status || "Нет данных"}</div>
-        <div class="meta">Локация: ${shipment.last_location || "Локация неизвестна"}</div>
-        <div class="meta">Обновлено: ${formatDate(shipment.last_update)}</div>
-      </div>
     `;
     grid.appendChild(card);
   });
+}
+
+function getShipmentStatusEmoji(status) {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("создан")) {
+    return "🆕";
+  }
+  if (normalized.includes("пути") || normalized.includes("в пути")) {
+    return "🚚";
+  }
+  if (normalized.includes("забра")) {
+    return "✅";
+  }
+  return "❔";
 }
 
 function renderDetailItems(container, items) {
@@ -252,6 +287,7 @@ function renderShipmentDetails(shipment, history = []) {
   const title = qs("shipment-detail-title");
   const route = qs("shipment-detail-route");
   const deleteBtn = qs("shipment-detail-delete");
+  const refreshBtn = qs("shipment-detail-refresh");
   const cdekLink = qs("shipment-cdek-link");
   const mainContainer = qs("shipment-detail-main");
   const extraContainer = qs("shipment-detail-extra");
@@ -261,6 +297,7 @@ function renderShipmentDetails(shipment, history = []) {
   title.textContent = `Поставка ${trackNumber || shipment.id}`;
   route.textContent = `${shipment.origin_label} → ${shipment.destination_label}`;
   deleteBtn.dataset.delete = shipment.id;
+  refreshBtn.dataset.refresh = shipment.id;
   cdekLink.href = trackNumber
     ? `https://www.cdek.ru/ru/tracking?order_id=${encodeURIComponent(trackNumber)}`
     : "https://www.cdek.ru/ru/tracking";
@@ -346,7 +383,7 @@ async function handleAddLocation() {
   }
 }
 
-function openShipmentModal(originLabel = null) {
+function openShipmentModal(destinationLabel = null) {
   const origin = qs("shipment-origin");
   const destination = qs("shipment-destination");
   const options = [
@@ -368,8 +405,8 @@ function openShipmentModal(originLabel = null) {
     destinationOption.textContent = option.label;
     destination.appendChild(destinationOption);
   });
-  if (originLabel) {
-    origin.value = originLabel;
+  if (destinationLabel) {
+    destination.value = destinationLabel;
   }
   qs("shipment-display-number").value = "";
   qs("shipment-error").textContent = "";
