@@ -68,6 +68,10 @@ body {
   min-height: 100vh;
 }
 
+#app.locations-layout {
+  grid-template-columns: 1fr;
+}
+
 .sidebar {
   background: #111827;
   color: #f9fafb;
@@ -75,6 +79,34 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.sidebar-nav {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sidebar-nav p {
+  color: #cbd5f5;
+}
+
+.sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.3);
+  color: #e0e7ff;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  font-size: 12px;
 }
 
 .brand h1 {
@@ -409,6 +441,7 @@ body[data-role="employee"] .admin-only {
 .card-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .card-actions button {
@@ -420,6 +453,38 @@ body[data-role="employee"] .admin-only {
   font-weight: 600;
 }
 
+.card-actions.primary-actions {
+  margin-top: 4px;
+}
+
+.card-actions.primary-actions button {
+  flex: 1 1 100%;
+}
+
+.add-card {
+  border: 2px dashed rgba(99, 102, 241, 0.4);
+  background: rgba(255, 255, 255, 0.8);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  color: #4338ca;
+  gap: 8px;
+}
+
+.add-card:hover {
+  border-color: rgba(99, 102, 241, 0.8);
+}
+
+.add-card-icon {
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.add-card-text {
+  font-weight: 600;
+  font-size: 14px;
+}
 .card-actions .secondary {
   background: #eef2ff;
   color: #4338ca;
@@ -603,17 +668,27 @@ td {
   position: relative;
   overflow: hidden;
   cursor: pointer;
-}
-
-.shipment-header {
-  display: flex;
-  justify-content: space-between;
+  flex-direction: row;
+  gap: 16px;
   align-items: flex-start;
 }
 
-.shipment-actions {
+.shipment-actions-left {
   display: flex;
   gap: 8px;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.shipment-actions-left .icon-btn {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.shipment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .danger {
@@ -641,21 +716,6 @@ td {
   color: #9ca3af;
 }
 
-.shipment-truck {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  width: 60px;
-  height: 32px;
-  background: linear-gradient(135deg, #fb923c, #f97316);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 18px;
-  box-shadow: 0 10px 20px rgba(249, 115, 22, 0.3);
-}
 
 .shipment-detail-actions {
   display: flex;

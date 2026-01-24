@@ -17,29 +17,18 @@
       <span class="crm-orb orb-2"></span>
       <span class="crm-orb orb-3"></span>
     </div>
-    <div id="app">
-      <aside class="sidebar">
-        <a class="ghost menu-link" href="/">В меню</a>
-        <button class="primary admin-only" id="add-location-btn">Добавить точку</button>
-        <button class="ghost admin-only" id="add-shipment-btn">Новая поставка</button>
-        <button class="ghost" id="export-btn">Экспорт Excel</button>
-        <div class="hint">
-          <h3>Быстрые подсказки</h3>
-          <ul>
-            <li>Данные загружаются из Excel или CSV.</li>
-            <li>Колонки распознаются автоматически.</li>
-            <li>Все изменения сохраняются.</li>
-          </ul>
-        </div>
-      </aside>
-
+    <div id="app" class="locations-layout">
       <main class="main">
         <header class="topbar">
-          <div>
-            <h2>Точки продаж</h2>
-            <span class="subtitle">Следите за остатками, продажами и выручкой</span>
+          <div class="topbar-actions">
+            <a class="ghost menu-link" href="/">В меню</a>
           </div>
         </header>
+
+        <section class="hero">
+          <span class="hero-badge">Работа с точками продаж</span>
+          <h2>Точки продаж</h2>
+        </section>
 
         <section class="grid" id="location-grid"></section>
 
@@ -159,9 +148,6 @@
             aria-label="Удалить"
           >
             ×
-          </button>
-          <button class="secondary" type="button" id="shipment-refresh">
-            Перезагрузить
           </button>
           <a
             class="cdek-button"

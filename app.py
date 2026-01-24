@@ -37,7 +37,7 @@ ACCESS_PAGES = [
     {"key": "tasks", "label": "Трекер задач", "path": "/operations/tasks"},
     {"key": "knowledge", "label": "База знаний", "path": "/operations/knowledge"},
     {"key": "training", "label": "Обучение", "path": "/training"},
-    {"key": "locations", "label": "Точки продаж", "path": "/locations"},
+    {"key": "locations", "label": "Работа с точками продаж", "path": "/locations"},
     {"key": "bloggers", "label": "Работа с блогерами", "path": "/bloggers"},
     {
         "key": "bloggers_settings",
@@ -2128,6 +2128,51 @@ def export_excel():
                 sheet_name = location["name"][:31] if location["name"] else f"Локация {location['id']}"
                 df.to_excel(writer, index=False, sheet_name=sheet_name)
     return send_file(export_path, as_attachment=True, download_name="crm_export.xlsx")
+
+
+@app.get("/api/export/<int:location_id>")
+def export_location_excel(location_id):
+    guard = require_page_access("locations", redirect_on_fail=False)
+    if guard:
+        return guard
+    with get_db() as conn:
+        location = conn.execute(
+            "SELECT id, name FROM locations WHERE id = ?",
+            (location_id,),
+        ).fetchone()
+        if not location:
+            return jsonify({"error": "Точка продаж не найдена"}), 404
+        records = conn.execute(
+            """
+            SELECT product, stock, sales_qty, sales_amount, record_date, source_file, created_at
+            FROM records
+            WHERE location_id = ?
+            ORDER BY created_at DESC
+            """,
+            (location_id,),
+        ).fetchall()
+        df = pd.DataFrame(records)
+        if df.empty:
+            df = pd.DataFrame(
+                columns=[
+                    "product",
+                    "stock",
+                    "sales_qty",
+                    "sales_amount",
+                    "record_date",
+                    "source_file",
+                    "created_at",
+                ]
+            )
+        export_path = os.path.join(DATA_DIR, f"export_{location_id}.xlsx")
+        sheet_name = (
+            location["name"][:31] if location["name"] else f"Локация {location_id}"
+        )
+        with pd.ExcelWriter(export_path, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name=sheet_name)
+    safe_name = re.sub(r"[^\wа-яА-Я-]+", "_", location["name"] or "location").strip("_")
+    download_name = f"crm_export_{safe_name or location_id}.xlsx"
+    return send_file(export_path, as_attachment=True, download_name=download_name)
 
 
 @app.get("/api/shipments")
