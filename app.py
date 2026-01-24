@@ -5,6 +5,7 @@ import re
 import sqlite3
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
@@ -655,6 +656,19 @@ def _extract_cdek_status(payload):
     }
 
 
+def _parse_cdek_status_payload(payload):
+    if not payload:
+        return None
+    orders = payload.get("orders") if isinstance(payload, dict) else None
+    if isinstance(orders, list) and orders:
+        for order in orders:
+            status = _extract_cdek_status(order)
+            if status:
+                return status
+        return None
+    return _extract_cdek_status(payload)
+
+
 def fetch_cdek_status(track_number: str):
     token = _get_cdek_token()
     if not token:
@@ -676,26 +690,28 @@ def fetch_cdek_status(track_number: str):
     try:
         with urllib.request.urlopen(request_obj, timeout=20) as response:
             payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code != 405:
+            logger.exception("Failed to fetch CDEK order status.")
+            return None
+        logger.warning("CDEK status endpoint rejected POST; retrying with GET.")
+        query = urllib.parse.urlencode({"cdek_number": track_number})
+        request_obj = urllib.request.Request(
+            f"{CDEK_STATUS_URL}?{query}",
+            method="GET",
+        )
+        request_obj.add_header("Authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(request_obj, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception:
+            logger.exception("Failed to fetch CDEK order status.")
+            return None
     except Exception:
         logger.exception("Failed to fetch CDEK order status.")
         return None
 
-    orders = payload.get("orders", [])
-    if not orders:
-        return None
-
-    statuses = orders[0].get("statuses", [])
-    if not statuses:
-        return None
-
-    latest = max(statuses, key=lambda x: x.get("date_time", ""))
-
-    return {
-        "status": latest.get("name"),
-        "code": latest.get("code"),
-        "location": latest.get("city"),
-        "timestamp": latest.get("date_time"),
-    }
+    return _parse_cdek_status_payload(payload)
 
 
 def update_shipment_from_cdek(conn, shipment_row):
