@@ -190,7 +190,7 @@ function renderShipments() {
         <div class="meta">Обновлено: ${formatDate(shipment.last_update)}</div>
       </div>
       <div class="shipment-actions-right">
-        <button class="icon-btn" data-refresh="${shipment.id}" aria-label="Обновить статусы">
+        <button class="icon-btn refresh" data-refresh="${shipment.id}" aria-label="Обновить статусы">
           ⟳
         </button>
         ${actionButtons}

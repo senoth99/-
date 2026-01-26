@@ -36,7 +36,7 @@ ACCESS_PAGES = [
     {"key": "tasks", "label": "Трекер задач", "path": "/operations/tasks"},
     {"key": "knowledge", "label": "База знаний", "path": "/operations/knowledge"},
     {"key": "training", "label": "Обучение", "path": "/training"},
-    {"key": "locations", "label": "Работа с точками продаж", "path": "/locations"},
+    {"key": "locations", "label": "Точки продаж", "path": "/locations"},
     {"key": "bloggers", "label": "Работа с блогерами", "path": "/bloggers"},
     {
         "key": "bloggers_settings",
@@ -659,6 +659,10 @@ def _extract_cdek_status_location(status_item):
         return location.get("name") or location.get("city_name")
     if isinstance(status_item.get("location"), str):
         return status_item.get("location")
+    for key in ("description", "status", "name", "comment", "message"):
+        value = status_item.get(key)
+        if isinstance(value, str) and "локация неизвестна" in value.lower():
+            return "Локация неизвестна"
     return None
 
 
@@ -697,9 +701,27 @@ def _extract_cdek_statuses(order_payload):
         statuses = order_payload.get("status_history") or []
     if not statuses:
         statuses = order_payload.get("states") or []
+    if not statuses:
+        single_status = (
+            order_payload.get("status")
+            or order_payload.get("state")
+            or order_payload.get("current_status")
+        )
+        if isinstance(single_status, dict):
+            statuses = [single_status]
     entity = order_payload.get("entity") if isinstance(order_payload, dict) else None
     if entity and isinstance(entity, dict):
         statuses = statuses or entity.get("statuses") or entity.get("status_history") or []
+        if not statuses:
+            statuses = entity.get("states") or []
+        if not statuses:
+            single_status = (
+                entity.get("status")
+                or entity.get("state")
+                or entity.get("current_status")
+            )
+            if isinstance(single_status, dict):
+                statuses = [single_status]
     return statuses or []
 
 
