@@ -582,12 +582,11 @@ def verify_password(password, password_hash):
 
 CDEK_API_BASE = os.environ.get("CDEK_API_BASE", "https://api.cdek.ru/v2")
 CDEK_TOKEN_URL = os.environ.get("CDEK_TOKEN_URL", f"{CDEK_API_BASE}/oauth/token")
-CDEK_TRACK_URL = os.environ.get(
-    "CDEK_TRACK_URL", f"{CDEK_API_BASE}/trackings/by/track_number"
-)
+CDEK_ORDERS_URL = os.environ.get("CDEK_ORDERS_URL", f"{CDEK_API_BASE}/orders")
 CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
 CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
 CDEK_UPDATE_INTERVAL = int(os.environ.get("CDEK_UPDATE_INTERVAL", "300"))
+
 
 class CdekAuthManager:
     def __init__(self):
@@ -676,14 +675,14 @@ def _extract_cdek_latest_status(statuses):
     }
 
 
-def _parse_cdek_tracking_payload(payload):
+def _parse_cdek_orders_payload(payload):
     if not payload:
         return None
     if isinstance(payload, dict) and payload.get("errors"):
-        logger.error("CDEK tracking API returned errors: %s", payload.get("errors"))
+        logger.error("CDEK orders API returned errors: %s", payload.get("errors"))
     entities = payload.get("entities") if isinstance(payload, dict) else None
     if not entities and isinstance(payload, dict):
-        entities = payload.get("trackings") or payload.get("orders")
+        entities = payload.get("orders")
     if isinstance(entities, list) and entities:
         for entity in entities:
             statuses = entity.get("statuses") or entity.get("status_history") or []
@@ -701,41 +700,44 @@ def _parse_cdek_tracking_payload(payload):
     return None
 
 
-def _build_cdek_tracking_payload(track_number: str):
+def _build_cdek_orders_params(track_number: str):
     sanitized = (track_number or "").strip()
     sanitized = re.sub(r"[^0-9A-Za-z]+", "", sanitized)
     if not sanitized:
         return None
-    return {"track_numbers": [sanitized]}
+    return {"cdek_number": sanitized}
 
 
-def _fetch_cdek_status_payload(token: str, body: dict):
-    request_body = json.dumps(body).encode("utf-8")
-    request_obj = urllib.request.Request(
-        CDEK_TRACK_URL,
-        data=request_body,
-        method="POST",
-    )
+def _fetch_cdek_orders_payload(token: str, params: dict):
+    url = f"{CDEK_ORDERS_URL}?{urllib.parse.urlencode(params)}"
+    request_obj = urllib.request.Request(url, method="GET")
     request_obj.add_header("Authorization", f"Bearer {token}")
-    request_obj.add_header("Content-Type", "application/json")
     with urllib.request.urlopen(request_obj, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def fetch_cdek_status(track_number: str):
-    payload_body = _build_cdek_tracking_payload(track_number)
-    if not payload_body:
+    params = _build_cdek_orders_params(track_number)
+    if not params:
         logger.warning("CDEK tracking number is empty.")
         return None
-    logger.info("Fetching CDEK tracking status for %s.", track_number)
+    logger.info("Fetching CDEK order status for %s.", track_number)
     last_error = None
     for attempt in range(2):
         token = cdek_auth_manager.get_token()
         if not token:
             return None
         try:
-            payload = _fetch_cdek_status_payload(token, payload_body)
-            return _parse_cdek_tracking_payload(payload)
+            payload = _fetch_cdek_orders_payload(token, params)
+            status = _parse_cdek_orders_payload(payload)
+            if status:
+                return status
+            if "cdek_number" in params:
+                payload = _fetch_cdek_orders_payload(
+                    token, {"im_number": params["cdek_number"]}
+                )
+                return _parse_cdek_orders_payload(payload)
+            return None
         except urllib.error.HTTPError as exc:
             last_error = exc
             if exc.code in {401, 403}:
@@ -751,24 +753,24 @@ def fetch_cdek_status(track_number: str):
                 time.sleep(0.5 * (attempt + 1))
                 continue
             if exc.code in {400, 404, 422}:
-                logger.warning("CDEK tracking API returned HTTP %s.", exc.code)
+                logger.warning("CDEK orders API returned HTTP %s.", exc.code)
                 return None
             if 500 <= exc.code <= 599:
-                logger.error("CDEK tracking API server error HTTP %s.", exc.code)
+                logger.error("CDEK orders API server error HTTP %s.", exc.code)
                 try:
                     logger.error("CDEK server error response: %s", exc.read())
                 except Exception:
                     pass
                 time.sleep(0.5 * (attempt + 1))
                 continue
-            logger.exception("Failed to fetch CDEK tracking status.")
+            logger.exception("Failed to fetch CDEK orders status.")
             return None
         except Exception as exc:
             last_error = exc
-            logger.exception("Failed to fetch CDEK tracking status.")
+            logger.exception("Failed to fetch CDEK orders status.")
             time.sleep(0.5 * (attempt + 1))
     if last_error:
-        logger.error("CDEK tracking API failed after retries.")
+        logger.error("CDEK orders API failed after retries.")
     return None
 
 
