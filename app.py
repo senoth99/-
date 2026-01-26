@@ -690,33 +690,15 @@ def _extract_cdek_latest_status(statuses):
 def _extract_cdek_statuses(order_payload):
     if not order_payload or not isinstance(order_payload, dict):
         return []
-    statuses = order_payload.get("statuses") or []
-    if not statuses:
-        statuses = order_payload.get("status_history") or []
-    if not statuses:
-        statuses = order_payload.get("states") or []
-    if not statuses:
-        single_status = (
-            order_payload.get("status")
-            or order_payload.get("state")
-            or order_payload.get("current_status")
-        )
-        if isinstance(single_status, dict):
-            statuses = [single_status]
-    entity = order_payload.get("entity") if isinstance(order_payload, dict) else None
-    if entity and isinstance(entity, dict):
-        statuses = statuses or entity.get("statuses") or entity.get("status_history") or []
-        if not statuses:
-            statuses = entity.get("states") or []
-        if not statuses:
-            single_status = (
-                entity.get("status")
-                or entity.get("state")
-                or entity.get("current_status")
-            )
-            if isinstance(single_status, dict):
-                statuses = [single_status]
-    return statuses or []
+    entity = order_payload.get("entity")
+    if isinstance(entity, dict):
+        statuses = entity.get("statuses")
+        if isinstance(statuses, list) and statuses:
+            return statuses
+    statuses = order_payload.get("statuses")
+    if isinstance(statuses, list) and statuses:
+        return statuses
+    return []
 
 
 def _parse_cdek_order_payload(payload):
