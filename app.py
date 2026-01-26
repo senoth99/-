@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -5,12 +6,10 @@ import re
 import sqlite3
 import threading
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 
+import httpx
 import pandas as pd
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session
 from werkzeug.utils import secure_filename
@@ -580,9 +579,11 @@ def verify_password(password, password_hash):
     return hash_password(password) == password_hash
 
 
-CDEK_API_BASE = os.environ.get("CDEK_API_BASE", "https://api.cdek.ru/v2")
+CDEK_API_BASE = os.environ.get("CDEK_BASE") or os.environ.get(
+    "CDEK_API_BASE", "https://api.cdek.ru/v2"
+)
 CDEK_TOKEN_URL = os.environ.get("CDEK_TOKEN_URL", f"{CDEK_API_BASE}/oauth/token")
-CDEK_TRACKINGS_URL = os.environ.get("CDEK_TRACKINGS_URL", f"{CDEK_API_BASE}/trackings")
+CDEK_ORDERS_URL = os.environ.get("CDEK_ORDERS_URL", f"{CDEK_API_BASE}/orders")
 CDEK_CLIENT_ID = os.environ.get("CDEK_CLIENT_ID")
 CDEK_CLIENT_SECRET = os.environ.get("CDEK_CLIENT_SECRET")
 CDEK_UPDATE_INTERVAL = int(os.environ.get("CDEK_UPDATE_INTERVAL", "300"))
@@ -591,52 +592,43 @@ CDEK_UPDATE_INTERVAL = int(os.environ.get("CDEK_UPDATE_INTERVAL", "300"))
 class CdekAuthManager:
     def __init__(self):
         self._token = None
-        self._expires_at = None
-        self._lock = threading.Lock()
+        self._expires_at = datetime.utcnow()
+        self._lock = asyncio.Lock()
 
-    def reset_token(self):
-        with self._lock:
+    async def reset_token(self):
+        async with self._lock:
             self._token = None
-            self._expires_at = None
+            self._expires_at = datetime.utcnow()
 
-    def get_token(self):
+    async def get_token(self):
         if not CDEK_CLIENT_ID or not CDEK_CLIENT_SECRET:
             logger.warning("CDEK credentials are not configured.")
             return None
-        with self._lock:
-            if (
-                self._token
-                and self._expires_at
-                and datetime.utcnow() < self._expires_at
-            ):
+        async with self._lock:
+            if self._token and datetime.utcnow() < self._expires_at:
                 return self._token
-            payload = urllib.parse.urlencode(
-                {
-                    "grant_type": "client_credentials",
-                    "client_id": CDEK_CLIENT_ID,
-                    "client_secret": CDEK_CLIENT_SECRET,
-                }
-            ).encode("utf-8")
-            request_obj = urllib.request.Request(
-                CDEK_TOKEN_URL, data=payload, method="POST"
-            )
-            request_obj.add_header("Content-Type", "application/x-www-form-urlencoded")
-            try:
-                with urllib.request.urlopen(request_obj, timeout=15) as response:
-                    data = json.loads(response.read().decode("utf-8"))
-            except urllib.error.HTTPError as exc:
-                logger.error(
-                    "CDEK OAuth token request failed with HTTP %s.",
-                    exc.code,
-                )
+            async with httpx.AsyncClient(timeout=20) as client:
                 try:
-                    logger.error("CDEK OAuth token response: %s", exc.read())
-                except Exception:
-                    pass
-                return None
-            except Exception:
-                logger.exception("Failed to fetch CDEK OAuth token.")
-                return None
+                    response = await client.post(
+                        CDEK_TOKEN_URL,
+                        data={
+                            "grant_type": "client_credentials",
+                            "client_id": CDEK_CLIENT_ID,
+                            "client_secret": CDEK_CLIENT_SECRET,
+                        },
+                    )
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    logger.error(
+                        "CDEK OAuth token request failed with HTTP %s.",
+                        exc.response.status_code,
+                    )
+                    logger.error("CDEK OAuth token response: %s", exc.response.text)
+                    return None
+                except httpx.RequestError:
+                    logger.exception("Failed to fetch CDEK OAuth token.")
+                    return None
+            data = response.json()
             token = data.get("access_token")
             if not token:
                 logger.error("CDEK OAuth token response missing access_token.")
@@ -654,121 +646,101 @@ cdek_auth_manager = CdekAuthManager()
 def _extract_cdek_latest_status(statuses):
     if not statuses:
         return None
+
     def sort_key(item):
-        return item.get("date_time") or item.get("timestamp") or item.get("date") or ""
+        return item.get("date_time") or ""
+
     latest = max(statuses, key=sort_key)
-    location_data = latest.get("location")
-    location = (
-        latest.get("city")
-        or latest.get("city_name")
-        or (location_data.get("city") if isinstance(location_data, dict) else None)
-        or latest.get("office")
-    )
     return {
-        "status": latest.get("name") or latest.get("description") or latest.get("status"),
         "code": latest.get("code"),
-        "location": location,
-        "timestamp": latest.get("date_time")
-        or latest.get("timestamp")
-        or latest.get("date")
-        or datetime.utcnow().isoformat(),
+        "status": latest.get("name"),
+        "location": latest.get("city_name"),
+        "timestamp": latest.get("date_time"),
     }
 
 
-def _parse_cdek_trackings_payload(payload):
-    if not payload:
+def _parse_cdek_order_payload(payload):
+    if not payload or not isinstance(payload, dict):
         return None
-    if isinstance(payload, dict) and payload.get("errors"):
-        logger.error("CDEK trackings API returned errors: %s", payload.get("errors"))
-    entities = payload.get("entities") if isinstance(payload, dict) else None
-    if not entities and isinstance(payload, dict):
-        entities = payload.get("trackings") or payload.get("data")
-    if isinstance(entities, list) and entities:
-        for entity in entities:
-            statuses = entity.get("statuses") or entity.get("status_history") or []
-            if isinstance(statuses, dict):
-                statuses = [statuses]
-            status = _extract_cdek_latest_status(statuses)
-            if status:
-                return status
+    orders = payload.get("orders") or []
+    if not orders:
         return None
-    if isinstance(payload, dict):
-        entity = payload.get("entity") or {}
-        if isinstance(entity, dict) and entity:
-            statuses = entity.get("statuses") or entity.get("status_history") or []
-        else:
-            statuses = payload.get("statuses") or payload.get("status") or []
-        if isinstance(statuses, dict):
-            statuses = [statuses]
-        return _extract_cdek_latest_status(statuses)
-    return None
+    statuses = orders[0].get("statuses") or []
+    if not statuses:
+        return None
+    return _extract_cdek_latest_status(statuses)
 
 
-def _build_cdek_trackings_body(track_number: str):
+def _sanitize_cdek_number(track_number: str):
     sanitized = (track_number or "").strip()
-    sanitized = re.sub(r"[^0-9A-Za-z]+", "", sanitized)
     if not sanitized:
         return None
-    return {"trackings": [{"track_number": sanitized}]}
+    return sanitized
 
 
-def _fetch_cdek_trackings_payload(token: str, body: dict):
-    payload = json.dumps(body).encode("utf-8")
-    request_obj = urllib.request.Request(CDEK_TRACKINGS_URL, data=payload, method="POST")
-    request_obj.add_header("Authorization", f"Bearer {token}")
-    request_obj.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(request_obj, timeout=20) as response:
-        return json.loads(response.read().decode("utf-8"))
+async def _fetch_cdek_order_payload(token: str, cdek_number: str):
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            CDEK_ORDERS_URL,
+            params={"cdek_number": cdek_number},
+            headers=headers,
+        )
+    return response
 
 
-def fetch_cdek_status(track_number: str):
-    body = _build_cdek_trackings_body(track_number)
-    if not body:
+async def _fetch_cdek_status_async(track_number: str):
+    sanitized = _sanitize_cdek_number(track_number)
+    if not sanitized:
         logger.warning("CDEK tracking number is empty.")
         return None
-    logger.info("Fetching CDEK tracking status for %s.", track_number)
+    logger.info("Fetching CDEK order status for %s.", sanitized)
     last_error = None
-    for attempt in range(2):
-        token = cdek_auth_manager.get_token()
+    for attempt in range(3):
+        token = await cdek_auth_manager.get_token()
         if not token:
             return None
         try:
-            payload = _fetch_cdek_trackings_payload(token, body)
-            return _parse_cdek_trackings_payload(payload)
-        except urllib.error.HTTPError as exc:
-            last_error = exc
-            if exc.code in {401, 403}:
-                logger.error("CDEK authorization failed with HTTP %s.", exc.code)
-                cdek_auth_manager.reset_token()
-                try:
-                    logger.error("CDEK auth error response: %s", exc.read())
-                except Exception:
-                    pass
+            response = await _fetch_cdek_order_payload(token, sanitized)
+            if response.status_code == 401:
+                logger.warning("CDEK authorization failed with HTTP 401.")
+                await cdek_auth_manager.reset_token()
                 continue
-            if exc.code == 429:
+            if response.status_code == 429:
                 logger.warning("CDEK rate limit reached. Sleeping before retry.")
-                time.sleep(0.5 * (attempt + 1))
+                await asyncio.sleep(0.5 * (attempt + 1))
                 continue
-            if exc.code in {400, 404, 422}:
-                logger.warning("CDEK trackings API returned HTTP %s.", exc.code)
+            if response.status_code in {400, 404}:
+                logger.warning("CDEK orders API returned HTTP %s.", response.status_code)
                 return None
-            if 500 <= exc.code <= 599:
-                logger.error("CDEK trackings API server error HTTP %s.", exc.code)
-                try:
-                    logger.error("CDEK server error response: %s", exc.read())
-                except Exception:
-                    pass
-                time.sleep(0.5 * (attempt + 1))
+            if 500 <= response.status_code <= 599:
+                logger.error(
+                    "CDEK orders API server error HTTP %s.", response.status_code
+                )
+                await asyncio.sleep(0.5 * (attempt + 1))
                 continue
-            logger.exception("Failed to fetch CDEK tracking status.")
-            return None
-        except Exception as exc:
+            response.raise_for_status()
+            payload = response.json()
+            return _parse_cdek_order_payload(payload)
+        except httpx.RequestError as exc:
             last_error = exc
-            logger.exception("Failed to fetch CDEK tracking status.")
-            time.sleep(0.5 * (attempt + 1))
+            logger.exception("Failed to fetch CDEK order status.")
+            await asyncio.sleep(0.5 * (attempt + 1))
+        except httpx.HTTPStatusError as exc:
+            last_error = exc
+            logger.exception("Failed to fetch CDEK order status.")
+            await asyncio.sleep(0.5 * (attempt + 1))
     if last_error:
-        logger.error("CDEK trackings API failed after retries.")
+        logger.error("CDEK orders API failed after retries.")
     return None
+
+
+def fetch_cdek_status(track_number: str):
+    try:
+        return asyncio.run(_fetch_cdek_status_async(track_number))
+    except RuntimeError:
+        logger.exception("Failed to run CDEK async status fetch.")
+        return None
 
 
 def _parse_iso_timestamp(value):
