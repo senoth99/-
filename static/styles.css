@@ -713,6 +713,21 @@ td {
   color: #4338ca;
 }
 
+.shipment-actions-right .icon-btn.refresh {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.shipment-actions-right .icon-btn.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.icon-btn.refresh {
+  background: #dcfce7;
+  color: #166534;
+}
+
 .shipment-info {
   display: flex;
   flex-direction: column;
