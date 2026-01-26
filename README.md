@@ -29,8 +29,17 @@ CRM распознает ключевые колонки по названиям
 преобразованы в число автоматически.
 
 ## Отслеживание поставок
-Для получения статусов по трек-номеру CDEK используется публичная страница
-отслеживания (без авторизации).
+Для получения статусов по трек-номеру CDEK используется API v2 с OAuth2.
+Настройте переменные окружения:
+
+```bash
+export CDEK_CLIENT_ID="your-client-id"
+export CDEK_CLIENT_SECRET="your-client-secret"
+export CDEK_API_BASE="https://api.cdek.ru/v2"
+export CDEK_TOKEN_URL="${CDEK_API_BASE}/oauth/token"
+export CDEK_TRACK_URL="${CDEK_API_BASE}/trackings/by/track_number"
+export CDEK_UPDATE_INTERVAL="300"
+```
 
 ## Требования
 Все зависимости перечислены в `requirements.txt`.
