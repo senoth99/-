@@ -643,29 +643,79 @@ class CdekAuthManager:
 cdek_auth_manager = CdekAuthManager()
 
 
+def _extract_cdek_status_location(status_item):
+    if not isinstance(status_item, dict):
+        return None
+    if status_item.get("city_name"):
+        return status_item.get("city_name")
+    city = status_item.get("city") or {}
+    if isinstance(city, dict):
+        if city.get("name"):
+            return city.get("name")
+        if city.get("city_name"):
+            return city.get("city_name")
+    location = status_item.get("location") or {}
+    if isinstance(location, dict):
+        return location.get("name") or location.get("city_name")
+    if isinstance(status_item.get("location"), str):
+        return status_item.get("location")
+    return None
+
+
 def _extract_cdek_latest_status(statuses):
     if not statuses:
         return None
 
     def sort_key(item):
-        return item.get("date_time") or ""
+        parsed = _parse_iso_timestamp(
+            item.get("date_time") or item.get("timestamp") or item.get("date")
+        )
+        if parsed:
+            return parsed
+        return item.get("date_time") or item.get("timestamp") or item.get("date") or ""
 
     latest = max(statuses, key=sort_key)
     return {
-        "code": latest.get("code"),
-        "status": latest.get("name"),
-        "location": latest.get("city_name"),
-        "timestamp": latest.get("date_time"),
+        "code": latest.get("code")
+        or latest.get("status_code")
+        or latest.get("state_code"),
+        "status": latest.get("name")
+        or latest.get("status")
+        or latest.get("description"),
+        "location": _extract_cdek_status_location(latest),
+        "timestamp": latest.get("date_time")
+        or latest.get("timestamp")
+        or latest.get("date"),
     }
+
+
+def _extract_cdek_statuses(order_payload):
+    if not order_payload or not isinstance(order_payload, dict):
+        return []
+    statuses = order_payload.get("statuses") or []
+    if not statuses:
+        statuses = order_payload.get("status_history") or []
+    if not statuses:
+        statuses = order_payload.get("states") or []
+    entity = order_payload.get("entity") if isinstance(order_payload, dict) else None
+    if entity and isinstance(entity, dict):
+        statuses = statuses or entity.get("statuses") or entity.get("status_history") or []
+    return statuses or []
 
 
 def _parse_cdek_order_payload(payload):
     if not payload or not isinstance(payload, dict):
         return None
-    orders = payload.get("orders") or []
+    orders = payload.get("orders")
+    if isinstance(orders, dict):
+        orders = [orders]
+    orders = orders or []
     if not orders:
+        if payload.get("entity"):
+            statuses = _extract_cdek_statuses(payload)
+            return _extract_cdek_latest_status(statuses) if statuses else None
         return None
-    statuses = orders[0].get("statuses") or []
+    statuses = _extract_cdek_statuses(orders[0])
     if not statuses:
         return None
     return _extract_cdek_latest_status(statuses)
