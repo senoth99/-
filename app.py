@@ -646,23 +646,17 @@ cdek_auth_manager = CdekAuthManager()
 def _extract_cdek_status_location(status_item):
     if not isinstance(status_item, dict):
         return None
+    location = status_item.get("location")
+    if isinstance(location, dict):
+        if location.get("name"):
+            return location.get("name")
     if status_item.get("city_name"):
         return status_item.get("city_name")
-    city = status_item.get("city") or {}
+    city = status_item.get("city")
     if isinstance(city, dict):
-        if city.get("name"):
-            return city.get("name")
-        if city.get("city_name"):
-            return city.get("city_name")
-    location = status_item.get("location") or {}
-    if isinstance(location, dict):
-        return location.get("name") or location.get("city_name")
-    if isinstance(status_item.get("location"), str):
-        return status_item.get("location")
-    for key in ("description", "status", "name", "comment", "message"):
-        value = status_item.get(key)
-        if isinstance(value, str) and "локация неизвестна" in value.lower():
-            return "Локация неизвестна"
+        return city.get("name") or city.get("city_name")
+    if isinstance(location, str):
+        return location
     return None
 
 
